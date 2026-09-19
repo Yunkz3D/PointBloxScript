@@ -7,7 +7,7 @@ local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
--- Indikator Titik Tengah (Center Crosshair)
+-- Indikator Titik Tengah
 local CenterDot = Drawing.new("Circle")
 CenterDot.Color = Color3.fromRGB(255, 0, 0)
 CenterDot.Thickness = 1
@@ -18,7 +18,7 @@ CenterDot.Visible = false
 
 -- Variabel Status Fitur
 local AutoAimActive = false
-local AimSmoothness = 0.02
+local AimSmoothness = 0.05 -- Nilai default sedang
 local FOVRadius = 60
 local AimTargetOption = "Kepala"
 
@@ -26,10 +26,8 @@ local ESPActive = false
 local ESPColor = Color3.fromRGB(255, 0, 0)
 local ESPDrawings = {}
 
-local GunModsActive = false
 local AutoGrenadeActive = false
 local NoRecoilActive = false
-local RPMSpeed = 800
 
 -- FUNGSI CEK MUSUH (TEAM CHECK)
 local function IsEnemy(player)
@@ -43,7 +41,7 @@ local function IsEnemy(player)
    return true
 end
 
--- FUNGSI AMBIL DARI BACKPACK JIKA HABIS
+-- FUNGSI AMBIL GRANAT DARI BACKPACK
 local function AutoEquipGrenade()
    local Character = LocalPlayer.Character
    local Backpack = LocalPlayer:FindFirstChild("Backpack")
@@ -77,28 +75,13 @@ local Window = Rayfield:CreateWindow({
 -- NOTIFIKASI
 Rayfield:Notify({
    Title = "Pemberitahuan",
-   Content = "Fitur berhasil dimuat dan siap digunakan!",
+   Content = "Fitur berhasil dimuat!",
    Duration = 4,
    Image = 4483362458,
 })
 
 -- TAB 1: FITUR UTAMA
 local MainTab = Window:CreateTab("Fitur Utama", 4483362458)
-
-MainTab:CreateToggle({
-   Name = "Peringatan Admin (Pesan Peringatan)",
-   CurrentValue = false,
-   Flag = "PeringatanAdmin",
-   Callback = function(Value)
-      if Value then
-         Rayfield:Notify({
-            Title = "Peringatan Admin",
-            Content = "Sistem pengawasan admin diaktifkan.",
-            Duration = 3,
-         })
-      end
-   end,
-})
 
 MainTab:CreateToggle({
    Name = "Aktifkan Bantuan Bidikan (Kunci Layar)",
@@ -110,31 +93,20 @@ MainTab:CreateToggle({
 })
 
 MainTab:CreateDropdown({
-   Name = "Kelengketan Bantuan Bidikan (Presisi Lock)",
-   Options = {"10%", "20%", "30%", "40%", "50%", "100% (Sangat Lengket)"},
-   CurrentOption = {"20%"},
+   Name = "Tingkat Kelengketan Kamera",
+   Options = {"Biasa (Halus)", "Sedang", "Lengket"},
+   CurrentOption = {"Sedang"},
    MultipleOptions = false,
    Flag = "PresetKelengketan",
    Callback = function(Option)
       local val = Option[1]
-      if val == "10%" then AimSmoothness = 0.01
-      elseif val == "20%" then AimSmoothness = 0.02
-      elseif val == "30%" then AimSmoothness = 0.05
-      elseif val == "40%" then AimSmoothness = 0.08
-      elseif val == "50%" then AimSmoothness = 0.12
-      elseif val == "100% (Sangat Lengket)" then AimSmoothness = 1.0
+      if val == "Biasa (Halus)" then
+         AimSmoothness = 0.02
+      elseif val == "Sedang" then
+         AimSmoothness = 0.05
+      elseif val == "Lengket" then
+         AimSmoothness = 0.15
       end
-   end,
-})
-
-MainTab:CreateDropdown({
-   Name = "Mode Bantuan Bidikan",
-   Options = {"POV Kamera", "Jarak Terdekat", "Pemain Terdekat"},
-   CurrentOption = {"POV Kamera"},
-   MultipleOptions = false,
-   Flag = "ModeAim",
-   Callback = function(Option)
-      -- Mode Aim
    end,
 })
 
@@ -205,7 +177,7 @@ MainTab:CreateDropdown({
 local GunTab = Window:CreateTab("Modifikasi Senjata", 4483362458)
 
 GunTab:CreateToggle({
-   Name = "Tanpa Rekoil (1 Titik Tidak Mencar)",
+   Name = "Tanpa Rekoil (Stabil 1 Titik)",
    CurrentValue = false,
    Flag = "NoRecoilToggle",
    Callback = function(Value)
@@ -214,7 +186,7 @@ GunTab:CreateToggle({
 })
 
 GunTab:CreateToggle({
-   Name = "Auto Granat (Insta-Kill Mematikan + Refill)",
+   Name = "Auto Ambil & Refill Granat",
    CurrentValue = false,
    Flag = "AutoGrenade",
    Callback = function(Value)
@@ -222,27 +194,6 @@ GunTab:CreateToggle({
       if Value then
          AutoEquipGrenade()
       end
-   end,
-})
-
-GunTab:CreateToggle({
-   Name = "Modifikasi Senjata (Peluru Tak Terbatas)",
-   CurrentValue = false,
-   Flag = "GunModsToggle",
-   Callback = function(Value)
-      GunModsActive = Value
-   end,
-})
-
-GunTab:CreateSlider({
-   Name = "Kecepatan Tembak (RPM)",
-   Range = {100, 1200},
-   Increment = 50,
-   Suffix = " RPM",
-   CurrentValue = 800,
-   Flag = "RPMSpeed",
-   Callback = function(Value)
-      RPMSpeed = Value
    end,
 })
 
@@ -291,7 +242,7 @@ RunService.RenderStepped:Connect(function()
    local ViewportCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
    CenterDot.Position = ViewportCenter
 
-   -- Logika No Recoil & No Spread Lengkap (Bypass Camera & Tool Script)
+   -- Logika No Recoil (Mengatur Nilai Spread/Recoil pada Tool)
    if NoRecoilActive and LocalPlayer.Character then
       local Tool = LocalPlayer.Character:FindFirstChildOfClass("Tool")
       if Tool then
@@ -306,33 +257,15 @@ RunService.RenderStepped:Connect(function()
       end
    end
 
-   -- Logika Auto Granat (Insta Kill Mematikan & Refill Otomatis)
+   -- Logika Refill Granat
    if AutoGrenadeActive and LocalPlayer.Character then
       local Tool = LocalPlayer.Character:FindFirstChildOfClass("Tool")
-      
-      if Tool and (string.find(string.lower(Tool.Name), "grenade") or string.find(string.lower(Tool.Name), "granat") or string.find(string.lower(Tool.Name), "bomb") or string.find(string.lower(Tool.Name), "m67")) then
-         for _, v in pairs(Tool:GetDescendants()) do
-            if v:IsA("Value") or v:IsA("NumberValue") then
-               local name = string.lower(v.Name)
-               if string.find(name, "damage") then v.Value = 9999 end
-               if string.find(name, "radius") or string.find(name, "range") then v.Value = 100 end
-               if string.find(name, "cooldown") or string.find(name, "delay") then v.Value = 0 end
-               if string.find(name, "ammo") or string.find(name, "count") or string.find(name, "amount") then v.Value = 99 end
-            end
-         end
-
-         Tool.AncestryChanged:Connect(function(_, parent)
-            if not parent then
-               task.wait(0.1)
-               AutoEquipGrenade()
-            end
-         end)
-      else
+      if not Tool or not (string.find(string.lower(Tool.Name), "grenade") or string.find(string.lower(Tool.Name), "granat") or string.find(string.lower(Tool.Name), "bomb") or string.find(string.lower(Tool.Name), "m67")) then
          AutoEquipGrenade()
       end
    end
 
-   -- Logika Aimbot
+   -- Logika Bantuan Bidikan Kamera
    if AutoAimActive then
       local ClosestTarget = nil
       local ShortestDistance = math.huge
@@ -370,7 +303,7 @@ RunService.RenderStepped:Connect(function()
       end
    end
 
-   -- Logika ESP Kotak & Garis (Musuh Saja)
+   -- Logika ESP Kotak & Garis
    if ESPActive then
       for _, player in pairs(Players:GetPlayers()) do
          if IsEnemy(player) and player.Character and player.Character:FindFirstChild("HumanoidRootPart") and player.Character:FindFirstChild("Humanoid") and player.Character.Humanoid.Health > 0 then
