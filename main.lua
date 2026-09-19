@@ -1,9 +1,37 @@
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
+-- Service Roblox (Sudah ditambahkan UserInputService agar tidak error)
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+
+-- Variabel Status Fitur
+local FOVCircle = Drawing.new("Circle")
+FOVCircle.Color = Color3.fromRGB(255, 255, 255)
+FOVCircle.Thickness = 1.5
+FOVCircle.NumSides = 64
+FOVCircle.Filled = false
+FOVCircle.Visible = false
+
+local AutoAimActive = false
+local AimSmoothness = 0.05
+local FOVRadius = 60
+local AimTargetPart = "Head"
+
+local ESPActive = false
+local ESPColor = Color3.fromRGB(255, 0, 0)
+local ESPDrawings = {}
+
+local GunModsActive = false
+local RPMSpeed = 800
+
+-- JENDELA UTAMA
 local Window = Rayfield:CreateWindow({
    Name = "Lite Hack + Ultimate Mods",
-   LoadingTitle = "Memuat Cheat...",
-   LoadingSubtitle = "Deep Memory Gun Mods Aktif!",
+   LoadingTitle = "Memuat Fitur...",
+   LoadingSubtitle = "Oleh Yunkz3D",
    ConfigurationSaving = {
       Enabled = true,
       FolderName = "PointBloxConfig",
@@ -11,159 +39,256 @@ local Window = Rayfield:CreateWindow({
    }
 })
 
--- NOTIFIKASI AWAL
+-- NOTIFIKASI
 Rayfield:Notify({
-   Title = "Memuat Cheat...",
-   Content = "Deep Memory Gun Mods Aktif!",
-   Duration = 5,
+   Title = "Pemberitahuan",
+   Content = "Fitur berhasil dimuat dan siap digunakan!",
+   Duration = 4,
    Image = 4483362458,
 })
 
--- TAB 1: MAIN FEATURES
-local MainTab = Window:CreateTab("Main Features", 4483362458)
+-- TAB 1: FITUR UTAMA
+local MainTab = Window:CreateTab("Fitur Utama", 4483362458)
 
 MainTab:CreateToggle({
-   Name = "Peringatan Admin (Popup Warning)",
+   Name = "Peringatan Admin (Pesan Peringatan)",
    CurrentValue = false,
-   Flag = "AdminWarn",
+   Flag = "PeringatanAdmin",
    Callback = function(Value)
-      -- Logika Peringatan Admin
+      if Value then
+         Rayfield:Notify({
+            Title = "Peringatan Admin",
+            Content = "Sistem pengawasan admin diaktifkan.",
+            Duration = 3,
+         })
+      end
    end,
 })
 
 MainTab:CreateToggle({
-   Name = "Aktifkan Auto Aim (Kunci Layar)",
+   Name = "Aktifkan Bantuan Bidikan (Kunci Layar)",
    CurrentValue = false,
    Flag = "AutoAim",
    Callback = function(Value)
-      -- Logika Auto Aim
+      AutoAimActive = Value
    end,
 })
 
 MainTab:CreateDropdown({
-   Name = "Mode Aimbot",
-   Options = {"POV Kamera (FOV)", "Distance", "Nearest"},
-   CurrentOption = {"POV Kamera (FOV)"},
+   Name = "Mode Bantuan Bidikan",
+   Options = {"FOV Kamera", "Jarak Terdekat", "Pemain Terdekat"},
+   CurrentOption = {"FOV Kamera"},
    MultipleOptions = false,
-   Flag = "AimbotMode",
+   Flag = "ModeAim",
    Callback = function(Option)
-      -- Logika Mode Aimbot
+      -- Mode Aim
    end,
 })
 
 MainTab:CreateDropdown({
    Name = "Target Bagian Tubuh",
-   Options = {"Head", "Torso", "HumanoidRootPart"},
-   CurrentOption = {"Head"},
+   Options = {"Kepala", "Dada", "Badan Utama"},
+   CurrentOption = {"Kepala"},
    MultipleOptions = false,
-   Flag = "AimTarget",
+   Flag = "TargetTubuh",
    Callback = function(Option)
-      -- Logika Target
+      local choice = Option[1]
+      if choice == "Kepala" then AimTargetPart = "Head"
+      elseif choice == "Dada" then AimTargetPart = "Torso"
+      elseif choice == "Badan Utama" then AimTargetPart = "HumanoidRootPart"
+      end
    end,
 })
 
--- Kelengketan Aim dibuat lebih halus (Nilai default diset ke 5% agar tidak terlalu brutal)
 MainTab:CreateSlider({
-   Name = "Kelengketan Aim POV (Smoothness)",
+   Name = "Kelengketan Bantuan Bidikan (Kelebutan)",
    Range = {1, 100},
    Increment = 1,
    Suffix = "%",
-   CurrentValue = 5, -- Default 5% agar pergerakan Aim halus/legit
-   Flag = "AimSmoothness",
+   CurrentValue = 5,
+   Flag = "SmoothnessAim",
    Callback = function(Value)
-      -- Atur kelengketan Aim
+      AimSmoothness = Value / 100
    end,
 })
 
 MainTab:CreateToggle({
-   Name = "Tampilkan Lingkaran FOV",
+   Name = "Tampilkan Lingkaran Bidikan",
    CurrentValue = false,
    Flag = "ShowFOV",
    Callback = function(Value)
-      -- Logika Tampil FOV
+      FOVCircle.Visible = Value
    end,
 })
 
--- Lebar Lingkaran FOV diperkecil (Default diset ke 60px agar tidak terlalu lebar)
 MainTab:CreateSlider({
-   Name = "Lebar Lingkaran FOV",
+   Name = "Lebar Lingkaran Bidikan",
    Range = {30, 300},
    Increment = 5,
-   Suffix = "Px",
-   CurrentValue = 60, -- Default 60px agar area FOV pas/tidak terlalu lebar
-   Flag = "FOVSize",
+   Suffix = " Px",
+   CurrentValue = 60,
+   Flag = "UkuranFOV",
    Callback = function(Value)
-      -- Atur ukuran lingkaran FOV
+      FOVRadius = Value
+      FOVCircle.Radius = Value
    end,
 })
 
--- Enemy ESP dengan opsi Box (Kotak) & Tracer (Garis Merah/Hitam)
 MainTab:CreateToggle({
-   Name = "Enemy ESP (Box & Line)",
+   Name = "Penglihat Musuh (Kotak & Garis)",
    CurrentValue = false,
    Flag = "EnemyESP",
    Callback = function(Value)
-      -- Logika ESP: Menampilkan Garis Merah/Hitam & Kotak di sekitar musuh
+      ESPActive = Value
+      if not Value then
+         for _, draw in pairs(ESPDrawings) do
+            if draw.Box then draw.Box:Remove() end
+            if draw.Line then draw.Line:Remove() end
+         end
+         ESPDrawings = {}
+      end
    end,
 })
 
 MainTab:CreateDropdown({
-   Name = "Warna Garis ESP",
+   Name = "Warna Garis Penglihat Musuh",
    Options = {"Merah", "Hitam"},
    CurrentOption = {"Merah"},
    MultipleOptions = false,
-   Flag = "ESPColor",
+   Flag = "WarnaESP",
    Callback = function(Option)
-      -- Atur warna garis tracer ESP
+      if Option[1] == "Merah" then
+         ESPColor = Color3.fromRGB(255, 0, 0)
+      else
+         ESPColor = Color3.fromRGB(0, 0, 0)
+      end
    end,
 })
 
--- TAB 2: GUN MODS
-local GunTab = Window:CreateTab("Gun Mods", 4483362458)
+-- TAB 2: MODIFIKASI SENJATA
+local GunTab = Window:CreateTab("Modifikasi Senjata", 4483362458)
 
 GunTab:CreateToggle({
-   Name = "Gun Mods (Infinite Ammo & RPM)",
+   Name = "Modifikasi Senjata (Peluru Tak Terbatas)",
    CurrentValue = false,
    Flag = "GunModsToggle",
    Callback = function(Value)
-      -- Logika Gun Mods
+      GunModsActive = Value
    end,
 })
 
 GunTab:CreateSlider({
-   Name = "RPM Fire Rate",
+   Name = "Kecepatan Tembak (RPM)",
    Range = {100, 1200},
    Increment = 50,
-   Suffix = "RPM",
+   Suffix = " RPM",
    CurrentValue = 800,
    Flag = "RPMSpeed",
    Callback = function(Value)
-      -- Atur RPM
+      RPMSpeed = Value
    end,
 })
 
--- TAB 3: CONFIGURATION
-local ConfigTab = Window:CreateTab("Configuration", 4483362458)
+-- TAB 3: PENGATURAN
+local ConfigTab = Window:CreateTab("Pengaturan", 4483362458)
 
-ConfigTab:CreateSection("Simpan settinganmu agar tidak perlu ngatur ulang saat pindah room.")
+ConfigTab:CreateSection("Simpan pengaturan agar tidak perlu mengatur ulang.")
 
 ConfigTab:CreateButton({
-   Name = "Save Konfigurasi",
+   Name = "Simpan Pengaturan",
    Callback = function()
       Rayfield:SaveConfiguration()
    end,
 })
 
 ConfigTab:CreateButton({
-   Name = "Load Konfigurasi",
+   Name = "Muat Pengaturan",
    Callback = function()
-      -- Logika Load Config
+      -- Muat konfigurasi tersimpan
    end,
 })
 
 ConfigTab:CreateButton({
-   Name = "Reset Semua ke Default",
+   Name = "Atur Ulang ke Awal",
    Callback = function()
-      -- Logika Reset Default
+      -- Reset ke default
    end,
 })
+
+-- LOGIKA SISTEM (FOVCIRCLE, AIMBOT, DAN ESP)
+RunService.RenderStepped:Connect(function()
+   -- Update Lingkaran FOV
+   local MousePos = UserInputService:GetMouseLocation()
+   FOVCircle.Position = Vector2.new(MousePos.X, MousePos.Y)
+   FOVCircle.Radius = FOVRadius
+
+   -- Logika Bantuan Bidikan (Aimbot)
+   if AutoAimActive then
+      local ClosestTarget = nil
+      local ShortestDistance = math.huge
+
+      for _, player in pairs(Players:GetPlayers()) do
+         if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild(AimTargetPart) and player.Character:FindFirstChild("Humanoid") and player.Character.Humanoid.Health > 0 then
+            local TargetPart = player.Character[AimTargetPart]
+            local ScreenPos, OnScreen = Camera:WorldToViewportPoint(TargetPart.Position)
+
+            if OnScreen then
+               local MouseDistance = (Vector2.new(ScreenPos.X, ScreenPos.Y) - Vector2.new(MousePos.X, MousePos.Y)).Magnitude
+               if MouseDistance <= FOVRadius and MouseDistance < ShortestDistance then
+                  ShortestDistance = MouseDistance
+                  ClosestTarget = TargetPart
+               end
+            end
+         end
+      end
+
+      if ClosestTarget then
+         local CurrentCamCFrame = Camera.CFrame
+         local TargetCFrame = CFrame.new(Camera.CFrame.Position, ClosestTarget.Position)
+         Camera.CFrame = CurrentCamCFrame:Lerp(TargetCFrame, AimSmoothness)
+      end
+   end
+
+   -- Logika ESP (Kotak & Garis)
+   if ESPActive then
+      for _, player in pairs(Players:GetPlayers()) do
+         if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") and player.Character:FindFirstChild("Humanoid") and player.Character.Humanoid.Health > 0 then
+            local Root = player.Character.HumanoidRootPart
+            local Pos, OnScreen = Camera:WorldToViewportPoint(Root.Position)
+
+            if OnScreen then
+               if not ESPDrawings[player] then
+                  ESPDrawings[player] = {
+                     Box = Drawing.new("Square"),
+                     Line = Drawing.new("Line")
+                  }
+               end
+
+               local Box = ESPDrawings[player].Box
+               Box.Visible = true
+               Box.Color = ESPColor
+               Box.Thickness = 1.5
+               Box.Size = Vector2.new(2000 / Pos.Z, 3000 / Pos.Z)
+               Box.Position = Vector2.new(Pos.X - Box.Size.X / 2, Pos.Y - Box.Size.Y / 2)
+
+               local Line = ESPDrawings[player].Line
+               Line.Visible = true
+               Line.Color = ESPColor
+               Line.Thickness = 1.5
+               Line.From = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
+               Line.To = Vector2.new(Pos.X, Pos.Y)
+            else
+               if ESPDrawings[player] then
+                  ESPDrawings[player].Box.Visible = false
+                  ESPDrawings[player].Line.Visible = false
+               end
+            end
+         else
+            if ESPDrawings[player] then
+               ESPDrawings[player].Box.Visible = false
+               ESPDrawings[player].Line.Visible = false
+            end
+         end
+      end
+   end
+end)
