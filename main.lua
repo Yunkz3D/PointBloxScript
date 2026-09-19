@@ -7,7 +7,7 @@ local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
--- Indikator Titik Tengah
+-- Indikator Titik Tengah (Center Crosshair RGB)
 local CenterDot = Drawing.new("Circle")
 CenterDot.Color = Color3.fromRGB(255, 0, 0)
 CenterDot.Thickness = 1
@@ -18,7 +18,7 @@ CenterDot.Visible = false
 
 -- Variabel Status Fitur
 local AutoAimActive = false
-local AimSmoothness = 0.05 -- Nilai default sedang
+local AimSmoothness = 0.25 -- Default Sedang
 local FOVRadius = 60
 local AimTargetOption = "Kepala"
 
@@ -28,6 +28,12 @@ local ESPDrawings = {}
 
 local AutoGrenadeActive = false
 local NoRecoilActive = false
+
+-- FUNGSI HITUNG WARNA RGB (RAINBOW EFFECT)
+local function GetRGBColor()
+   local Hue = (tick() % 3) / 3
+   return Color3.fromHSV(Hue, 1, 1)
+end
 
 -- FUNGSI CEK MUSUH (TEAM CHECK)
 local function IsEnemy(player)
@@ -60,11 +66,39 @@ local function AutoEquipGrenade()
    end
 end
 
--- JENDELA UTAMA
+-- JENDELA UTAMA (TEMA RGB CUSTOM)
 local Window = Rayfield:CreateWindow({
-   Name = "Lite Hack + Ultimate Mods",
-   LoadingTitle = "Memuat Fitur...",
+   Name = "Lite Hack + Ultimate Mods (RGB Edition)",
+   LoadingTitle = "Memuat Fitur RGB...",
    LoadingSubtitle = "Oleh Yunkz3D",
+   Theme = "Default",
+   CustomTheme = {
+      TextColor = Color3.fromRGB(255, 255, 255),
+      Background = Color3.fromRGB(15, 15, 15),
+      Topbar = Color3.fromRGB(25, 25, 25),
+      Shadow = Color3.fromRGB(0, 0, 0),
+      NotificationBackground = Color3.fromRGB(20, 20, 20),
+      NotificationActionsBackground = Color3.fromRGB(230, 230, 230),
+      TabBackground = Color3.fromRGB(25, 25, 25),
+      TabStroke = Color3.fromRGB(255, 0, 0),
+      TabBackgroundSelected = Color3.fromRGB(40, 40, 40),
+      ElementBackground = Color3.fromRGB(25, 25, 25),
+      ElementBackgroundHover = Color3.fromRGB(35, 35, 35),
+      ElementStroke = Color3.fromRGB(255, 0, 0),
+      SecondaryElementBackground = Color3.fromRGB(20, 20, 20),
+      SecondaryElementStroke = Color3.fromRGB(40, 40, 40),
+      SliderBackground = Color3.fromRGB(30, 30, 30),
+      SliderProgress = Color3.fromRGB(255, 0, 0),
+      SliderStroke = Color3.fromRGB(255, 0, 0),
+      ToggleBackground = Color3.fromRGB(30, 30, 30),
+      ToggleEnabled = Color3.fromRGB(255, 0, 0),
+      ToggleDisabled = Color3.fromRGB(80, 80, 80),
+      DropdownBackground = Color3.fromRGB(25, 25, 25),
+      DropdownStroke = Color3.fromRGB(255, 0, 0),
+      InputBackground = Color3.fromRGB(25, 25, 25),
+      InputStroke = Color3.fromRGB(255, 0, 0),
+      PlaceholderColor = Color3.fromRGB(178, 178, 178)
+   },
    ConfigurationSaving = {
       Enabled = true,
       FolderName = "PointBloxConfig",
@@ -75,7 +109,7 @@ local Window = Rayfield:CreateWindow({
 -- NOTIFIKASI
 Rayfield:Notify({
    Title = "Pemberitahuan",
-   Content = "Fitur berhasil dimuat!",
+   Content = "Fitur RGB menyala berhasil dimuat!",
    Duration = 4,
    Image = 4483362458,
 })
@@ -94,18 +128,18 @@ MainTab:CreateToggle({
 
 MainTab:CreateDropdown({
    Name = "Tingkat Kelengketan Kamera",
-   Options = {"Biasa (Halus)", "Sedang", "Lengket"},
-   CurrentOption = {"Sedang"},
+   Options = {"Biasa (Sedikit Lock)", "Sedang (Lumayan Lock)", "Besar (Lock 100%)"},
+   CurrentOption = {"Sedang (Lumayan Lock)"},
    MultipleOptions = false,
    Flag = "PresetKelengketan",
    Callback = function(Option)
       local val = Option[1]
-      if val == "Biasa (Halus)" then
-         AimSmoothness = 0.02
-      elseif val == "Sedang" then
-         AimSmoothness = 0.05
-      elseif val == "Lengket" then
-         AimSmoothness = 0.15
+      if val == "Biasa (Sedikit Lock)" then
+         AimSmoothness = 0.08
+      elseif val == "Sedang (Lumayan Lock)" then
+         AimSmoothness = 0.25
+      elseif val == "Besar (Lock 100%)" then
+         AimSmoothness = 1.0
       end
    end,
 })
@@ -160,16 +194,12 @@ MainTab:CreateToggle({
 
 MainTab:CreateDropdown({
    Name = "Warna Garis Penglihat Musuh",
-   Options = {"Merah", "Hitam"},
-   CurrentOption = {"Merah"},
+   Options = {"Mode RGB (Pelangi Menyala)", "Merah Static", "Hitam Static"},
+   CurrentOption = {"Mode RGB (Pelangi Menyala)"},
    MultipleOptions = false,
    Flag = "WarnaESP",
    Callback = function(Option)
-      if Option[1] == "Merah" then
-         ESPColor = Color3.fromRGB(255, 0, 0)
-      else
-         ESPColor = Color3.fromRGB(0, 0, 0)
-      end
+      -- Diatur dalam loop utama
    end,
 })
 
@@ -237,12 +267,16 @@ end
 
 Players.PlayerRemoving:Connect(ClearPlayerESP)
 
--- LOGIKA SISTEM UTAMA
+-- LOGIKA SISTEM UTAMA (LOOP FRAME)
 RunService.RenderStepped:Connect(function()
+   local CurrentRGB = GetRGBColor()
    local ViewportCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+   
+   -- Titik Tengah RGB
    CenterDot.Position = ViewportCenter
+   CenterDot.Color = CurrentRGB
 
-   -- Logika No Recoil (Mengatur Nilai Spread/Recoil pada Tool)
+   -- Logika No Recoil
    if NoRecoilActive and LocalPlayer.Character then
       local Tool = LocalPlayer.Character:FindFirstChildOfClass("Tool")
       if Tool then
@@ -265,7 +299,7 @@ RunService.RenderStepped:Connect(function()
       end
    end
 
-   -- Logika Bantuan Bidikan Kamera
+   -- Logika Aimbot
    if AutoAimActive then
       local ClosestTarget = nil
       local ShortestDistance = math.huge
@@ -299,11 +333,15 @@ RunService.RenderStepped:Connect(function()
       if ClosestTarget then
          local CurrentCamCFrame = Camera.CFrame
          local TargetCFrame = CFrame.new(Camera.CFrame.Position, ClosestTarget.Position)
-         Camera.CFrame = CurrentCamCFrame:Lerp(TargetCFrame, AimSmoothness)
+         if AimSmoothness >= 1.0 then
+            Camera.CFrame = TargetCFrame
+         else
+            Camera.CFrame = CurrentCamCFrame:Lerp(TargetCFrame, AimSmoothness)
+         end
       end
    end
 
-   -- Logika ESP Kotak & Garis
+   -- Logika ESP Kotak & Garis RGB
    if ESPActive then
       for _, player in pairs(Players:GetPlayers()) do
          if IsEnemy(player) and player.Character and player.Character:FindFirstChild("HumanoidRootPart") and player.Character:FindFirstChild("Humanoid") and player.Character.Humanoid.Health > 0 then
@@ -327,14 +365,14 @@ RunService.RenderStepped:Connect(function()
 
                local Box = ESPDrawings[player].Box
                Box.Visible = true
-               Box.Color = ESPColor
+               Box.Color = CurrentRGB
                Box.Thickness = 1.5
                Box.Size = Vector2.new(BoxWidth, BoxHeight)
                Box.Position = Vector2.new(Pos.X - BoxWidth / 2, Pos.Y - BoxHeight / 2)
 
                local Line = ESPDrawings[player].Line
                Line.Visible = true
-               Line.Color = ESPColor
+               Line.Color = CurrentRGB
                Line.Thickness = 1.5
                Line.From = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
                Line.To = Vector2.new(Pos.X, Pos.Y)
