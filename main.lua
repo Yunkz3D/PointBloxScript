@@ -18,9 +18,14 @@ CenterDot.Visible = false
 
 -- Variabel Status Fitur
 local AutoAimActive = false
-local AimSmoothness = 0.25 -- Default Sedang
+local AimSmoothness = 0.25
 local FOVRadius = 60
 local AimTargetOption = "Kepala"
+
+-- Variabel Mode Brutal Auto-Switch
+local BrutalModeActive = false
+local AutoSwitchOnKill = false
+local CurrentLockedTarget = nil
 
 local ESPActive = false
 local ESPColor = Color3.fromRGB(255, 0, 0)
@@ -66,10 +71,10 @@ local function AutoEquipGrenade()
    end
 end
 
--- JENDELA UTAMA (TEMA RGB CUSTOM)
+-- JENDELA UTAMA
 local Window = Rayfield:CreateWindow({
-   Name = "Lite Hack + Ultimate Mods (RGB Edition)",
-   LoadingTitle = "Memuat Fitur RGB...",
+   Name = "PointBlox Hub (Mode Brutal Lock)",
+   LoadingTitle = "Memuat Fitur...",
    LoadingSubtitle = "Oleh Yunkz3D",
    Theme = "Default",
    CustomTheme = {
@@ -109,9 +114,47 @@ local Window = Rayfield:CreateWindow({
 -- NOTIFIKASI
 Rayfield:Notify({
    Title = "Pemberitahuan",
-   Content = "Fitur RGB menyala berhasil dimuat!",
+   Content = "Fitur Mode Brutal Lock Siap Digunakan!",
    Duration = 4,
    Image = 4483362458,
+})
+
+-- TAB KHUSUS: MODE BRUTAL LOCK
+local BrutalTab = Window:CreateTab("Mode Brutal Lock", 4483362458)
+
+BrutalTab:CreateToggle({
+   Name = "Aktifkan Mode Brutal (Lock 100%)",
+   CurrentValue = false,
+   Flag = "BrutalModeToggle",
+   Callback = function(Value)
+      BrutalModeActive = Value
+      if Value then
+         AutoAimActive = true
+         AimSmoothness = 1.0 -- Lock Mutlak 100%
+         CenterDot.Visible = true
+         Rayfield:Notify({Title = "Mode Brutal", Content = "Aimlock 100% Aktif!", Duration = 3})
+      end
+   end,
+})
+
+BrutalTab:CreateToggle({
+   Name = "Auto-Pindah Target saat Kill (Instant Lock Next)",
+   CurrentValue = false,
+   Flag = "AutoSwitchKill",
+   Callback = function(Value)
+      AutoSwitchOnKill = Value
+   end,
+})
+
+BrutalTab:CreateDropdown({
+   Name = "Target Bagian Tubuh Brutal",
+   Options = {"Kepala", "Dada", "Acak (Kepala / Dada)"},
+   CurrentOption = {"Kepala"},
+   MultipleOptions = false,
+   Flag = "TargetTubuhBrutal",
+   Callback = function(Option)
+      AimTargetOption = Option[1]
+   end,
 })
 
 -- TAB 1: FITUR UTAMA
@@ -144,17 +187,6 @@ MainTab:CreateDropdown({
    end,
 })
 
-MainTab:CreateDropdown({
-   Name = "Target Bagian Tubuh",
-   Options = {"Kepala", "Dada", "Badan Utama", "Acak (Kepala / Dada)"},
-   CurrentOption = {"Kepala"},
-   MultipleOptions = false,
-   Flag = "TargetTubuh",
-   Callback = function(Option)
-      AimTargetOption = Option[1]
-   end,
-})
-
 MainTab:CreateToggle({
    Name = "Tampilkan Titik Tengah (Center Crosshair)",
    CurrentValue = false,
@@ -166,10 +198,10 @@ MainTab:CreateToggle({
 
 MainTab:CreateSlider({
    Name = "Jangkauan Bantuan Bidikan (Area Lock)",
-   Range = {30, 300},
-   Increment = 5,
+   Range = {30, 500},
+   Increment = 10,
    Suffix = " Px",
-   CurrentValue = 60,
+   CurrentValue = 100,
    Flag = "UkuranFOV",
    Callback = function(Value)
       FOVRadius = Value
@@ -189,17 +221,6 @@ MainTab:CreateToggle({
          end
          ESPDrawings = {}
       end
-   end,
-})
-
-MainTab:CreateDropdown({
-   Name = "Warna Garis Penglihat Musuh",
-   Options = {"Mode RGB (Pelangi Menyala)", "Merah Static", "Hitam Static"},
-   CurrentOption = {"Mode RGB (Pelangi Menyala)"},
-   MultipleOptions = false,
-   Flag = "WarnaESP",
-   Callback = function(Option)
-      -- Diatur dalam loop utama
    end,
 })
 
@@ -236,11 +257,7 @@ ConfigTab:CreateButton({
    Name = "Simpan Pengaturan",
    Callback = function()
       Rayfield:SaveConfiguration()
-      Rayfield:Notify({
-         Title = "Pengaturan",
-         Content = "Pengaturan tersimpan!",
-         Duration = 3,
-      })
+      Rayfield:Notify({Title = "Pengaturan", Content = "Pengaturan tersimpan!", Duration = 3})
    end,
 })
 
@@ -248,11 +265,7 @@ ConfigTab:CreateButton({
    Name = "Muat Pengaturan",
    Callback = function()
       Rayfield:LoadConfiguration()
-      Rayfield:Notify({
-         Title = "Pengaturan",
-         Content = "Pengaturan berhasil dimuat!",
-         Duration = 3,
-      })
+      Rayfield:Notify({Title = "Pengaturan", Content = "Pengaturan berhasil dimuat!", Duration = 3})
    end,
 })
 
@@ -267,7 +280,7 @@ end
 
 Players.PlayerRemoving:Connect(ClearPlayerESP)
 
--- LOGIKA SISTEM UTAMA (LOOP FRAME)
+-- LOGIKA SISTEM UTAMA
 RunService.RenderStepped:Connect(function()
    local CurrentRGB = GetRGBColor()
    local ViewportCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
@@ -299,44 +312,53 @@ RunService.RenderStepped:Connect(function()
       end
    end
 
-   -- Logika Aimbot
+   -- Logika Aimbot & Auto-Switch Target saat Kill
    if AutoAimActive then
-      local ClosestTarget = nil
-      local ShortestDistance = math.huge
       local SelectedPart = "Head"
-
       if AimTargetOption == "Kepala" then
          SelectedPart = "Head"
       elseif AimTargetOption == "Dada" then
          SelectedPart = "Torso"
-      elseif AimTargetOption == "Badan Utama" then
-         SelectedPart = "HumanoidRootPart"
       elseif AimTargetOption == "Acak (Kepala / Dada)" then
          SelectedPart = (math.random(1, 2) == 1) and "Head" or "Torso"
       end
 
-      for _, player in pairs(Players:GetPlayers()) do
-         if IsEnemy(player) and player.Character and player.Character:FindFirstChild(SelectedPart) and player.Character:FindFirstChild("Humanoid") and player.Character.Humanoid.Health > 0 then
-            local TargetPart = player.Character[SelectedPart]
-            local ScreenPos, OnScreen = Camera:WorldToViewportPoint(TargetPart.Position)
+      -- Cek apakah target saat ini masih hidup
+      local TargetValid = false
+      if CurrentLockedTarget and CurrentLockedTarget.Parent and CurrentLockedTarget.Parent:FindFirstChild("Humanoid") then
+         if CurrentLockedTarget.Parent.Humanoid.Health > 0 then
+            TargetValid = true
+         end
+      end
 
-            if OnScreen then
-               local CenterDistance = (Vector2.new(ScreenPos.X, ScreenPos.Y) - ViewportCenter).Magnitude
-               if CenterDistance <= FOVRadius and CenterDistance < ShortestDistance then
-                  ShortestDistance = CenterDistance
-                  ClosestTarget = TargetPart
+      -- Jika target mati atau tidak ada, cari musuh terdekat berikutnya
+      if not TargetValid or (AutoSwitchOnKill and not TargetValid) then
+         CurrentLockedTarget = nil
+         local ShortestDistance = math.huge
+
+         for _, player in pairs(Players:GetPlayers()) do
+            if IsEnemy(player) and player.Character and player.Character:FindFirstChild(SelectedPart) and player.Character:FindFirstChild("Humanoid") and player.Character.Humanoid.Health > 0 then
+               local TargetPart = player.Character[SelectedPart]
+               local ScreenPos, OnScreen = Camera:WorldToViewportPoint(TargetPart.Position)
+
+               if OnScreen then
+                  local CenterDistance = (Vector2.new(ScreenPos.X, ScreenPos.Y) - ViewportCenter).Magnitude
+                  if CenterDistance <= FOVRadius and CenterDistance < ShortestDistance then
+                     ShortestDistance = CenterDistance
+                     CurrentLockedTarget = TargetPart
+                  end
                end
             end
          end
       end
 
-      if ClosestTarget then
-         local CurrentCamCFrame = Camera.CFrame
-         local TargetCFrame = CFrame.new(Camera.CFrame.Position, ClosestTarget.Position)
-         if AimSmoothness >= 1.0 then
+      -- Kunci Kamera ke Target yang Aktif
+      if CurrentLockedTarget then
+         local TargetCFrame = CFrame.new(Camera.CFrame.Position, CurrentLockedTarget.Position)
+         if AimSmoothness >= 1.0 or BrutalModeActive then
             Camera.CFrame = TargetCFrame
          else
-            Camera.CFrame = CurrentCamCFrame:Lerp(TargetCFrame, AimSmoothness)
+            Camera.CFrame = Camera.CFrame:Lerp(TargetCFrame, AimSmoothness)
          end
       end
    end
