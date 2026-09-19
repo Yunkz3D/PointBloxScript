@@ -7,14 +7,16 @@ local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
--- Variabel Status Fitur
-local FOVCircle = Drawing.new("Circle")
-FOVCircle.Color = Color3.fromRGB(255, 255, 255)
-FOVCircle.Thickness = 1.5
-FOVCircle.NumSides = 64
-FOVCircle.Filled = false
-FOVCircle.Visible = false
+-- Indikator Titik Tengah (Center Dot)
+local CenterDot = Drawing.new("Circle")
+CenterDot.Color = Color3.fromRGB(255, 0, 0) -- Warna Merah
+CenterDot.Thickness = 1
+CenterDot.NumSides = 30
+CenterDot.Radius = 3 -- Ukuran Titik
+CenterDot.Filled = true
+CenterDot.Visible = false
 
+-- Variabel Status Fitur
 local AutoAimActive = false
 local AimSmoothness = 0.05
 local FOVRadius = 60
@@ -38,6 +40,34 @@ local function IsEnemy(player)
       return player.TeamColor ~= LocalPlayer.TeamColor
    end
    return true
+end
+
+-- FUNGSI AMBIL DAN PEGANG BAZOOKA OTOMATIS
+local function AutoEquipBazooka()
+   local Character = LocalPlayer.Character
+   local Backpack = LocalPlayer:FindFirstChild("Backpack")
+   if not Character or not Backpack then return end
+
+   local BazookaTool = nil
+   for _, tool in pairs(Backpack:GetChildren()) do
+      if tool:IsA("Tool") and (string.find(string.lower(tool.Name), "bazooka") or string.find(string.lower(tool.Name), "rpg") or string.find(string.lower(tool.Name), "rocket")) then
+         BazookaTool = tool
+         break
+      end
+   end
+
+   if not BazookaTool then
+      for _, tool in pairs(Character:GetChildren()) do
+         if tool:IsA("Tool") and (string.find(string.lower(tool.Name), "bazooka") or string.find(string.lower(tool.Name), "rpg") or string.find(string.lower(tool.Name), "rocket")) then
+            BazookaTool = tool
+            break
+         end
+      end
+   end
+
+   if BazookaTool and BazookaTool.Parent == Backpack then
+      Character.Humanoid:EquipTool(BazookaTool)
+   end
 end
 
 -- JENDELA UTAMA
@@ -89,8 +119,8 @@ MainTab:CreateToggle({
 
 MainTab:CreateDropdown({
    Name = "Mode Bantuan Bidikan",
-   Options = {"FOV Kamera", "Jarak Terdekat", "Pemain Terdekat"},
-   CurrentOption = {"FOV Kamera"},
+   Options = {"POV Kamera", "Jarak Terdekat", "Pemain Terdekat"},
+   CurrentOption = {"POV Kamera"},
    MultipleOptions = false,
    Flag = "ModeAim",
    Callback = function(Option)
@@ -126,16 +156,16 @@ MainTab:CreateSlider({
 })
 
 MainTab:CreateToggle({
-   Name = "Tampilkan Lingkaran Bidikan",
+   Name = "Tampilkan Titik Tengah (Center Crosshair)",
    CurrentValue = false,
-   Flag = "ShowFOV",
+   Flag = "ShowCenterDot",
    Callback = function(Value)
-      FOVCircle.Visible = Value
+      CenterDot.Visible = Value
    end,
 })
 
 MainTab:CreateSlider({
-   Name = "Lebar Lingkaran Bidikan",
+   Name = "Jangkauan Bantuan Bidikan (Area Lock)",
    Range = {30, 300},
    Increment = 5,
    Suffix = " Px",
@@ -143,7 +173,6 @@ MainTab:CreateSlider({
    Flag = "UkuranFOV",
    Callback = function(Value)
       FOVRadius = Value
-      FOVCircle.Radius = Value
    end,
 })
 
@@ -191,11 +220,14 @@ GunTab:CreateToggle({
 })
 
 GunTab:CreateToggle({
-   Name = "Bazooka Brutal (Spam RPG & Tembakan Cepat)",
+   Name = "Bazooka Brutal (Auto Ambil & Spam RPG)",
    CurrentValue = false,
    Flag = "BazookaBrutal",
    Callback = function(Value)
       BazookaBrutalActive = Value
+      if Value then
+         AutoEquipBazooka()
+      end
    end,
 })
 
@@ -248,12 +280,11 @@ end
 
 Players.PlayerRemoving:Connect(ClearPlayerESP)
 
--- LOGIKA SISTEM (FOVCIRCLE, AIMBOT, BAZOOKA, DAN ESP)
+-- LOGIKA SISTEM
 RunService.RenderStepped:Connect(function()
-   -- Position FOV Circle
-   local MousePos = UserInputService:GetMouseLocation()
-   FOVCircle.Position = Vector2.new(MousePos.X, MousePos.Y)
-   FOVCircle.Radius = FOVRadius
+   -- Posisi Titik Layar Tepat Di Tengah Kamera
+   local ViewportCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+   CenterDot.Position = ViewportCenter
 
    -- Logika Bazooka Brutal
    if BazookaBrutalActive and LocalPlayer.Character then
@@ -262,10 +293,12 @@ RunService.RenderStepped:Connect(function()
          if Tool:FindFirstChild("Ammo") then Tool.Ammo.Value = 999 end
          if Tool:FindFirstChild("StoredAmmo") then Tool.StoredAmmo.Value = 999 end
          if Tool:FindFirstChild("Cooldown") then Tool.Cooldown.Value = 0 end
+      else
+         AutoEquipBazooka()
       end
    end
 
-   -- Logika Aimbot (Khusus Musuh)
+   -- Logika Aimbot (Mengunci dari Tengah Layar)
    if AutoAimActive then
       local ClosestTarget = nil
       local ShortestDistance = math.huge
@@ -276,9 +309,9 @@ RunService.RenderStepped:Connect(function()
             local ScreenPos, OnScreen = Camera:WorldToViewportPoint(TargetPart.Position)
 
             if OnScreen then
-               local MouseDistance = (Vector2.new(ScreenPos.X, ScreenPos.Y) - Vector2.new(MousePos.X, MousePos.Y)).Magnitude
-               if MouseDistance <= FOVRadius and MouseDistance < ShortestDistance then
-                  ShortestDistance = MouseDistance
+               local CenterDistance = (Vector2.new(ScreenPos.X, ScreenPos.Y) - ViewportCenter).Magnitude
+               if CenterDistance <= FOVRadius and CenterDistance < ShortestDistance then
+                  ShortestDistance = CenterDistance
                   ClosestTarget = TargetPart
                end
             end
@@ -292,7 +325,7 @@ RunService.RenderStepped:Connect(function()
       end
    end
 
-   -- Logika ESP Kotak & Garis (Khusus Musuh)
+   -- Logika ESP Kotak & Garis (Musuh Saja)
    if ESPActive then
       for _, player in pairs(Players:GetPlayers()) do
          if IsEnemy(player) and player.Character and player.Character:FindFirstChild("HumanoidRootPart") and player.Character:FindFirstChild("Humanoid") and player.Character.Humanoid.Health > 0 then
@@ -308,7 +341,6 @@ RunService.RenderStepped:Connect(function()
                   }
                end
 
-               -- Perhitungan Ukuran Kotak Berdasarkan Bounding Box Karakter
                local CFramePos, Size = Char:GetBoundingBox()
                local TopPos = Camera:WorldToViewportPoint((CFramePos * CFrame.new(0, Size.Y / 2, 0)).Position)
                local BottomPos = Camera:WorldToViewportPoint((CFramePos * CFrame.new(0, -Size.Y / 2, 0)).Position)
