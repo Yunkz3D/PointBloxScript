@@ -20,7 +20,7 @@ CenterDot.Visible = false
 local AutoAimActive = false
 local AimSmoothness = 0.02
 local FOVRadius = 60
-local AimTargetPart = "Head"
+local AimTargetOption = "Kepala"
 
 local ESPActive = false
 local ESPColor = Color3.fromRGB(255, 0, 0)
@@ -43,7 +43,7 @@ local function IsEnemy(player)
    return true
 end
 
--- FUNGSI AUTO GRANAT (INSTA KILL & UNLIMITED)
+-- FUNGSI AMBIL DARI BACKPACK JIKA HABIS
 local function AutoEquipGrenade()
    local Character = LocalPlayer.Character
    local Backpack = LocalPlayer:FindFirstChild("Backpack")
@@ -51,22 +51,13 @@ local function AutoEquipGrenade()
 
    local GrenadeTool = nil
    for _, tool in pairs(Backpack:GetChildren()) do
-      if tool:IsA("Tool") and (string.find(string.lower(tool.Name), "grenade") or string.find(string.lower(tool.Name), "granat") or string.find(string.lower(tool.Name), "bomb")) then
+      if tool:IsA("Tool") and (string.find(string.lower(tool.Name), "grenade") or string.find(string.lower(tool.Name), "granat") or string.find(string.lower(tool.Name), "bomb") or string.find(string.lower(tool.Name), "m67")) then
          GrenadeTool = tool
          break
       end
    end
 
-   if not GrenadeTool then
-      for _, tool in pairs(Character:GetChildren()) do
-         if tool:IsA("Tool") and (string.find(string.lower(tool.Name), "grenade") or string.find(string.lower(tool.Name), "granat") or string.find(string.lower(tool.Name), "bomb")) then
-            GrenadeTool = tool
-            break
-         end
-      end
-   end
-
-   if GrenadeTool and GrenadeTool.Parent == Backpack then
+   if GrenadeTool then
       Character.Humanoid:EquipTool(GrenadeTool)
    end
 end
@@ -119,6 +110,24 @@ MainTab:CreateToggle({
 })
 
 MainTab:CreateDropdown({
+   Name = "Kelengketan Bantuan Bidikan (Presisi Lock)",
+   Options = {"10%", "20%", "30%", "40%", "50%", "100% (Sangat Lengket)"},
+   CurrentOption = {"20%"},
+   MultipleOptions = false,
+   Flag = "PresetKelengketan",
+   Callback = function(Option)
+      local val = Option[1]
+      if val == "10%" then AimSmoothness = 0.01
+      elseif val == "20%" then AimSmoothness = 0.02
+      elseif val == "30%" then AimSmoothness = 0.05
+      elseif val == "40%" then AimSmoothness = 0.08
+      elseif val == "50%" then AimSmoothness = 0.12
+      elseif val == "100% (Sangat Lengket)" then AimSmoothness = 1.0
+      end
+   end,
+})
+
+MainTab:CreateDropdown({
    Name = "Mode Bantuan Bidikan",
    Options = {"POV Kamera", "Jarak Terdekat", "Pemain Terdekat"},
    CurrentOption = {"POV Kamera"},
@@ -131,28 +140,12 @@ MainTab:CreateDropdown({
 
 MainTab:CreateDropdown({
    Name = "Target Bagian Tubuh",
-   Options = {"Kepala", "Dada", "Badan Utama"},
+   Options = {"Kepala", "Dada", "Badan Utama", "Acak (Kepala / Dada)"},
    CurrentOption = {"Kepala"},
    MultipleOptions = false,
    Flag = "TargetTubuh",
    Callback = function(Option)
-      local choice = Option[1]
-      if choice == "Kepala" then AimTargetPart = "Head"
-      elseif choice == "Dada" then AimTargetPart = "Torso"
-      elseif choice == "Badan Utama" then AimTargetPart = "HumanoidRootPart"
-      end
-   end,
-})
-
-MainTab:CreateSlider({
-   Name = "Kelengketan Bantuan Bidikan (Kelebutan)",
-   Range = {1, 100},
-   Increment = 1,
-   Suffix = "%",
-   CurrentValue = 2,
-   Flag = "SmoothnessAim",
-   Callback = function(Value)
-      AimSmoothness = Value / 100
+      AimTargetOption = Option[1]
    end,
 })
 
@@ -221,7 +214,7 @@ GunTab:CreateToggle({
 })
 
 GunTab:CreateToggle({
-   Name = "Auto Granat (Insta-Kill & Unlimited)",
+   Name = "Auto Granat (Insta-Kill Mematikan + Refill)",
    CurrentValue = false,
    Flag = "AutoGrenade",
    Callback = function(Value)
@@ -262,20 +255,23 @@ ConfigTab:CreateButton({
    Name = "Simpan Pengaturan",
    Callback = function()
       Rayfield:SaveConfiguration()
+      Rayfield:Notify({
+         Title = "Pengaturan",
+         Content = "Pengaturan tersimpan!",
+         Duration = 3,
+      })
    end,
 })
 
 ConfigTab:CreateButton({
    Name = "Muat Pengaturan",
    Callback = function()
-      -- Muat
-   end,
-})
-
-ConfigTab:CreateButton({
-   Name = "Atur Ulang ke Awal",
-   Callback = function()
-      -- Reset
+      Rayfield:LoadConfiguration()
+      Rayfield:Notify({
+         Title = "Pengaturan",
+         Content = "Pengaturan berhasil dimuat!",
+         Duration = 3,
+      })
    end,
 })
 
@@ -295,14 +291,14 @@ RunService.RenderStepped:Connect(function()
    local ViewportCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
    CenterDot.Position = ViewportCenter
 
-   -- Logika No Recoil & No Spread
+   -- Logika No Recoil & No Spread Lengkap (Bypass Camera & Tool Script)
    if NoRecoilActive and LocalPlayer.Character then
       local Tool = LocalPlayer.Character:FindFirstChildOfClass("Tool")
       if Tool then
          for _, v in pairs(Tool:GetDescendants()) do
-            if v:IsA("Value") or v:IsA("NumberValue") then
+            if v:IsA("Value") or v:IsA("NumberValue") or v:IsA("IntValue") then
                local name = string.lower(v.Name)
-               if string.find(name, "recoil") or string.find(name, "spread") or string.find(name, "accuracy") then
+               if string.find(name, "recoil") or string.find(name, "spread") or string.find(name, "accuracy") or string.find(name, "kick") then
                   v.Value = 0
                end
             end
@@ -310,16 +306,27 @@ RunService.RenderStepped:Connect(function()
       end
    end
 
-   -- Logika Auto Granat (Insta Kill, Cooldown 0, & Unlimited Ammo)
+   -- Logika Auto Granat (Insta Kill Mematikan & Refill Otomatis)
    if AutoGrenadeActive and LocalPlayer.Character then
       local Tool = LocalPlayer.Character:FindFirstChildOfClass("Tool")
-      if Tool and (string.find(string.lower(Tool.Name), "grenade") or string.find(string.lower(Tool.Name), "granat") or string.find(string.lower(Tool.Name), "bomb")) then
-         if Tool:FindFirstChild("Damage") then Tool.Damage.Value = 9999 end
-         if Tool:FindFirstChild("BlastRadius") then Tool.BlastRadius.Value = 50 end
-         if Tool:FindFirstChild("Cooldown") then Tool.Cooldown.Value = 0 end
-         if Tool:FindFirstChild("Ammo") then Tool.Ammo.Value = 999 end
-         if Tool:FindFirstChild("StoredAmmo") then Tool.StoredAmmo.Value = 999 end
-         if Tool:FindFirstChild("Amount") then Tool.Amount.Value = 999 end
+      
+      if Tool and (string.find(string.lower(Tool.Name), "grenade") or string.find(string.lower(Tool.Name), "granat") or string.find(string.lower(Tool.Name), "bomb") or string.find(string.lower(Tool.Name), "m67")) then
+         for _, v in pairs(Tool:GetDescendants()) do
+            if v:IsA("Value") or v:IsA("NumberValue") then
+               local name = string.lower(v.Name)
+               if string.find(name, "damage") then v.Value = 9999 end
+               if string.find(name, "radius") or string.find(name, "range") then v.Value = 100 end
+               if string.find(name, "cooldown") or string.find(name, "delay") then v.Value = 0 end
+               if string.find(name, "ammo") or string.find(name, "count") or string.find(name, "amount") then v.Value = 99 end
+            end
+         end
+
+         Tool.AncestryChanged:Connect(function(_, parent)
+            if not parent then
+               task.wait(0.1)
+               AutoEquipGrenade()
+            end
+         end)
       else
          AutoEquipGrenade()
       end
@@ -329,10 +336,21 @@ RunService.RenderStepped:Connect(function()
    if AutoAimActive then
       local ClosestTarget = nil
       local ShortestDistance = math.huge
+      local SelectedPart = "Head"
+
+      if AimTargetOption == "Kepala" then
+         SelectedPart = "Head"
+      elseif AimTargetOption == "Dada" then
+         SelectedPart = "Torso"
+      elseif AimTargetOption == "Badan Utama" then
+         SelectedPart = "HumanoidRootPart"
+      elseif AimTargetOption == "Acak (Kepala / Dada)" then
+         SelectedPart = (math.random(1, 2) == 1) and "Head" or "Torso"
+      end
 
       for _, player in pairs(Players:GetPlayers()) do
-         if IsEnemy(player) and player.Character and player.Character:FindFirstChild(AimTargetPart) and player.Character:FindFirstChild("Humanoid") and player.Character.Humanoid.Health > 0 then
-            local TargetPart = player.Character[AimTargetPart]
+         if IsEnemy(player) and player.Character and player.Character:FindFirstChild(SelectedPart) and player.Character:FindFirstChild("Humanoid") and player.Character.Humanoid.Health > 0 then
+            local TargetPart = player.Character[SelectedPart]
             local ScreenPos, OnScreen = Camera:WorldToViewportPoint(TargetPart.Position)
 
             if OnScreen then
@@ -352,7 +370,7 @@ RunService.RenderStepped:Connect(function()
       end
    end
 
-   -- Logika ESP Kotak & Garis (Khusus Musuh)
+   -- Logika ESP Kotak & Garis (Musuh Saja)
    if ESPActive then
       for _, player in pairs(Players:GetPlayers()) do
          if IsEnemy(player) and player.Character and player.Character:FindFirstChild("HumanoidRootPart") and player.Character:FindFirstChild("Humanoid") and player.Character.Humanoid.Health > 0 then
