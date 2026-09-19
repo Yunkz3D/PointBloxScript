@@ -1,6 +1,6 @@
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
--- Service Roblox (Sudah ditambahkan UserInputService agar tidak error)
+-- Service Roblox
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -25,7 +25,20 @@ local ESPColor = Color3.fromRGB(255, 0, 0)
 local ESPDrawings = {}
 
 local GunModsActive = false
+local BazookaBrutalActive = false
 local RPMSpeed = 800
+
+-- FUNGSI CEK MUSUH (TEAM CHECK)
+local function IsEnemy(player)
+   if player == LocalPlayer then return false end
+   if LocalPlayer.Team and player.Team then
+      return LocalPlayer.Team ~= player.Team
+   end
+   if player:FindFirstChild("TeamColor") and LocalPlayer:FindFirstChild("TeamColor") then
+      return player.TeamColor ~= LocalPlayer.TeamColor
+   end
+   return true
+end
 
 -- JENDELA UTAMA
 local Window = Rayfield:CreateWindow({
@@ -177,6 +190,15 @@ GunTab:CreateToggle({
    end,
 })
 
+GunTab:CreateToggle({
+   Name = "Bazooka Brutal (Spam RPG & Tembakan Cepat)",
+   CurrentValue = false,
+   Flag = "BazookaBrutal",
+   Callback = function(Value)
+      BazookaBrutalActive = Value
+   end,
+})
+
 GunTab:CreateSlider({
    Name = "Kecepatan Tembak (RPM)",
    Range = {100, 1200},
@@ -204,31 +226,52 @@ ConfigTab:CreateButton({
 ConfigTab:CreateButton({
    Name = "Muat Pengaturan",
    Callback = function()
-      -- Muat konfigurasi tersimpan
+      -- Muat
    end,
 })
 
 ConfigTab:CreateButton({
    Name = "Atur Ulang ke Awal",
    Callback = function()
-      -- Reset ke default
+      -- Reset
    end,
 })
 
--- LOGIKA SISTEM (FOVCIRCLE, AIMBOT, DAN ESP)
+-- FUNGSI HAPUS ESP PLAYER KELUAR/MATI
+local function ClearPlayerESP(player)
+   if ESPDrawings[player] then
+      if ESPDrawings[player].Box then ESPDrawings[player].Box:Remove() end
+      if ESPDrawings[player].Line then ESPDrawings[player].Line:Remove() end
+      ESPDrawings[player] = nil
+   end
+end
+
+Players.PlayerRemoving:Connect(ClearPlayerESP)
+
+-- LOGIKA SISTEM (FOVCIRCLE, AIMBOT, BAZOOKA, DAN ESP)
 RunService.RenderStepped:Connect(function()
-   -- Update Lingkaran FOV
+   -- Position FOV Circle
    local MousePos = UserInputService:GetMouseLocation()
    FOVCircle.Position = Vector2.new(MousePos.X, MousePos.Y)
    FOVCircle.Radius = FOVRadius
 
-   -- Logika Bantuan Bidikan (Aimbot)
+   -- Logika Bazooka Brutal
+   if BazookaBrutalActive and LocalPlayer.Character then
+      local Tool = LocalPlayer.Character:FindFirstChildOfClass("Tool")
+      if Tool then
+         if Tool:FindFirstChild("Ammo") then Tool.Ammo.Value = 999 end
+         if Tool:FindFirstChild("StoredAmmo") then Tool.StoredAmmo.Value = 999 end
+         if Tool:FindFirstChild("Cooldown") then Tool.Cooldown.Value = 0 end
+      end
+   end
+
+   -- Logika Aimbot (Khusus Musuh)
    if AutoAimActive then
       local ClosestTarget = nil
       local ShortestDistance = math.huge
 
       for _, player in pairs(Players:GetPlayers()) do
-         if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild(AimTargetPart) and player.Character:FindFirstChild("Humanoid") and player.Character.Humanoid.Health > 0 then
+         if IsEnemy(player) and player.Character and player.Character:FindFirstChild(AimTargetPart) and player.Character:FindFirstChild("Humanoid") and player.Character.Humanoid.Health > 0 then
             local TargetPart = player.Character[AimTargetPart]
             local ScreenPos, OnScreen = Camera:WorldToViewportPoint(TargetPart.Position)
 
@@ -249,11 +292,12 @@ RunService.RenderStepped:Connect(function()
       end
    end
 
-   -- Logika ESP (Kotak & Garis)
+   -- Logika ESP Kotak & Garis (Khusus Musuh)
    if ESPActive then
       for _, player in pairs(Players:GetPlayers()) do
-         if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") and player.Character:FindFirstChild("Humanoid") and player.Character.Humanoid.Health > 0 then
-            local Root = player.Character.HumanoidRootPart
+         if IsEnemy(player) and player.Character and player.Character:FindFirstChild("HumanoidRootPart") and player.Character:FindFirstChild("Humanoid") and player.Character.Humanoid.Health > 0 then
+            local Char = player.Character
+            local Root = Char.HumanoidRootPart
             local Pos, OnScreen = Camera:WorldToViewportPoint(Root.Position)
 
             if OnScreen then
@@ -264,12 +308,19 @@ RunService.RenderStepped:Connect(function()
                   }
                end
 
+               -- Perhitungan Ukuran Kotak Berdasarkan Bounding Box Karakter
+               local CFramePos, Size = Char:GetBoundingBox()
+               local TopPos = Camera:WorldToViewportPoint((CFramePos * CFrame.new(0, Size.Y / 2, 0)).Position)
+               local BottomPos = Camera:WorldToViewportPoint((CFramePos * CFrame.new(0, -Size.Y / 2, 0)).Position)
+               local BoxHeight = math.abs(TopPos.Y - BottomPos.Y)
+               local BoxWidth = BoxHeight / 1.5
+
                local Box = ESPDrawings[player].Box
                Box.Visible = true
                Box.Color = ESPColor
                Box.Thickness = 1.5
-               Box.Size = Vector2.new(2000 / Pos.Z, 3000 / Pos.Z)
-               Box.Position = Vector2.new(Pos.X - Box.Size.X / 2, Pos.Y - Box.Size.Y / 2)
+               Box.Size = Vector2.new(BoxWidth, BoxHeight)
+               Box.Position = Vector2.new(Pos.X - BoxWidth / 2, Pos.Y - BoxHeight / 2)
 
                local Line = ESPDrawings[player].Line
                Line.Visible = true
@@ -278,16 +329,10 @@ RunService.RenderStepped:Connect(function()
                Line.From = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
                Line.To = Vector2.new(Pos.X, Pos.Y)
             else
-               if ESPDrawings[player] then
-                  ESPDrawings[player].Box.Visible = false
-                  ESPDrawings[player].Line.Visible = false
-               end
+               ClearPlayerESP(player)
             end
          else
-            if ESPDrawings[player] then
-               ESPDrawings[player].Box.Visible = false
-               ESPDrawings[player].Line.Visible = false
-            end
+            ClearPlayerESP(player)
          end
       end
    end
