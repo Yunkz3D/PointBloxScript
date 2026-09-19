@@ -7,18 +7,18 @@ local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
--- Indikator Titik Tengah (Center Dot)
+-- Indikator Titik Tengah (Center Crosshair)
 local CenterDot = Drawing.new("Circle")
-CenterDot.Color = Color3.fromRGB(255, 0, 0) -- Warna Merah
+CenterDot.Color = Color3.fromRGB(255, 0, 0)
 CenterDot.Thickness = 1
 CenterDot.NumSides = 30
-CenterDot.Radius = 3 -- Ukuran Titik
+CenterDot.Radius = 3
 CenterDot.Filled = true
 CenterDot.Visible = false
 
 -- Variabel Status Fitur
 local AutoAimActive = false
-local AimSmoothness = 0.05
+local AimSmoothness = 0.02
 local FOVRadius = 60
 local AimTargetPart = "Head"
 
@@ -27,7 +27,8 @@ local ESPColor = Color3.fromRGB(255, 0, 0)
 local ESPDrawings = {}
 
 local GunModsActive = false
-local BazookaBrutalActive = false
+local AutoGrenadeActive = false
+local NoRecoilActive = false
 local RPMSpeed = 800
 
 -- FUNGSI CEK MUSUH (TEAM CHECK)
@@ -42,31 +43,31 @@ local function IsEnemy(player)
    return true
 end
 
--- FUNGSI AMBIL DAN PEGANG BAZOOKA OTOMATIS
-local function AutoEquipBazooka()
+-- FUNGSI AUTO GRANAT (INSTA KILL & UNLIMITED)
+local function AutoEquipGrenade()
    local Character = LocalPlayer.Character
    local Backpack = LocalPlayer:FindFirstChild("Backpack")
    if not Character or not Backpack then return end
 
-   local BazookaTool = nil
+   local GrenadeTool = nil
    for _, tool in pairs(Backpack:GetChildren()) do
-      if tool:IsA("Tool") and (string.find(string.lower(tool.Name), "bazooka") or string.find(string.lower(tool.Name), "rpg") or string.find(string.lower(tool.Name), "rocket")) then
-         BazookaTool = tool
+      if tool:IsA("Tool") and (string.find(string.lower(tool.Name), "grenade") or string.find(string.lower(tool.Name), "granat") or string.find(string.lower(tool.Name), "bomb")) then
+         GrenadeTool = tool
          break
       end
    end
 
-   if not BazookaTool then
+   if not GrenadeTool then
       for _, tool in pairs(Character:GetChildren()) do
-         if tool:IsA("Tool") and (string.find(string.lower(tool.Name), "bazooka") or string.find(string.lower(tool.Name), "rpg") or string.find(string.lower(tool.Name), "rocket")) then
-            BazookaTool = tool
+         if tool:IsA("Tool") and (string.find(string.lower(tool.Name), "grenade") or string.find(string.lower(tool.Name), "granat") or string.find(string.lower(tool.Name), "bomb")) then
+            GrenadeTool = tool
             break
          end
       end
    end
 
-   if BazookaTool and BazookaTool.Parent == Backpack then
-      Character.Humanoid:EquipTool(BazookaTool)
+   if GrenadeTool and GrenadeTool.Parent == Backpack then
+      Character.Humanoid:EquipTool(GrenadeTool)
    end
 end
 
@@ -148,7 +149,7 @@ MainTab:CreateSlider({
    Range = {1, 100},
    Increment = 1,
    Suffix = "%",
-   CurrentValue = 5,
+   CurrentValue = 2,
    Flag = "SmoothnessAim",
    Callback = function(Value)
       AimSmoothness = Value / 100
@@ -211,23 +212,32 @@ MainTab:CreateDropdown({
 local GunTab = Window:CreateTab("Modifikasi Senjata", 4483362458)
 
 GunTab:CreateToggle({
+   Name = "Tanpa Rekoil (1 Titik Tidak Mencar)",
+   CurrentValue = false,
+   Flag = "NoRecoilToggle",
+   Callback = function(Value)
+      NoRecoilActive = Value
+   end,
+})
+
+GunTab:CreateToggle({
+   Name = "Auto Granat (Insta-Kill & Unlimited)",
+   CurrentValue = false,
+   Flag = "AutoGrenade",
+   Callback = function(Value)
+      AutoGrenadeActive = Value
+      if Value then
+         AutoEquipGrenade()
+      end
+   end,
+})
+
+GunTab:CreateToggle({
    Name = "Modifikasi Senjata (Peluru Tak Terbatas)",
    CurrentValue = false,
    Flag = "GunModsToggle",
    Callback = function(Value)
       GunModsActive = Value
-   end,
-})
-
-GunTab:CreateToggle({
-   Name = "Bazooka Brutal (Auto Ambil & Spam RPG)",
-   CurrentValue = false,
-   Flag = "BazookaBrutal",
-   Callback = function(Value)
-      BazookaBrutalActive = Value
-      if Value then
-         AutoEquipBazooka()
-      end
    end,
 })
 
@@ -280,25 +290,42 @@ end
 
 Players.PlayerRemoving:Connect(ClearPlayerESP)
 
--- LOGIKA SISTEM
+-- LOGIKA SISTEM UTAMA
 RunService.RenderStepped:Connect(function()
-   -- Posisi Titik Layar Tepat Di Tengah Kamera
    local ViewportCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
    CenterDot.Position = ViewportCenter
 
-   -- Logika Bazooka Brutal
-   if BazookaBrutalActive and LocalPlayer.Character then
+   -- Logika No Recoil & No Spread
+   if NoRecoilActive and LocalPlayer.Character then
       local Tool = LocalPlayer.Character:FindFirstChildOfClass("Tool")
       if Tool then
-         if Tool:FindFirstChild("Ammo") then Tool.Ammo.Value = 999 end
-         if Tool:FindFirstChild("StoredAmmo") then Tool.StoredAmmo.Value = 999 end
-         if Tool:FindFirstChild("Cooldown") then Tool.Cooldown.Value = 0 end
-      else
-         AutoEquipBazooka()
+         for _, v in pairs(Tool:GetDescendants()) do
+            if v:IsA("Value") or v:IsA("NumberValue") then
+               local name = string.lower(v.Name)
+               if string.find(name, "recoil") or string.find(name, "spread") or string.find(name, "accuracy") then
+                  v.Value = 0
+               end
+            end
+         end
       end
    end
 
-   -- Logika Aimbot (Mengunci dari Tengah Layar)
+   -- Logika Auto Granat (Insta Kill, Cooldown 0, & Unlimited Ammo)
+   if AutoGrenadeActive and LocalPlayer.Character then
+      local Tool = LocalPlayer.Character:FindFirstChildOfClass("Tool")
+      if Tool and (string.find(string.lower(Tool.Name), "grenade") or string.find(string.lower(Tool.Name), "granat") or string.find(string.lower(Tool.Name), "bomb")) then
+         if Tool:FindFirstChild("Damage") then Tool.Damage.Value = 9999 end
+         if Tool:FindFirstChild("BlastRadius") then Tool.BlastRadius.Value = 50 end
+         if Tool:FindFirstChild("Cooldown") then Tool.Cooldown.Value = 0 end
+         if Tool:FindFirstChild("Ammo") then Tool.Ammo.Value = 999 end
+         if Tool:FindFirstChild("StoredAmmo") then Tool.StoredAmmo.Value = 999 end
+         if Tool:FindFirstChild("Amount") then Tool.Amount.Value = 999 end
+      else
+         AutoEquipGrenade()
+      end
+   end
+
+   -- Logika Aimbot
    if AutoAimActive then
       local ClosestTarget = nil
       local ShortestDistance = math.huge
@@ -325,7 +352,7 @@ RunService.RenderStepped:Connect(function()
       end
    end
 
-   -- Logika ESP Kotak & Garis (Musuh Saja)
+   -- Logika ESP Kotak & Garis (Khusus Musuh)
    if ESPActive then
       for _, player in pairs(Players:GetPlayers()) do
          if IsEnemy(player) and player.Character and player.Character:FindFirstChild("HumanoidRootPart") and player.Character:FindFirstChild("Humanoid") and player.Character.Humanoid.Health > 0 then
