@@ -18,14 +18,9 @@ CenterDot.Visible = false
 
 -- Variabel Status Fitur
 local AutoAimActive = false
-local AimSmoothness = 0.25
-local FOVRadius = 60
+local AimSmoothness = 0.25 -- Fleksibel & Tidak Kaku
 local AimTargetOption = "Kepala"
-
--- Variabel Mode Brutal Auto-Switch
-local BrutalModeActive = false
-local AutoSwitchOnKill = false
-local CurrentLockedTarget = nil
+local MaxDistance = 80 -- Jarak Maksimal Lock (Hanya Musuh Dekat)
 
 local ESPActive = false
 local ESPColor = Color3.fromRGB(255, 0, 0)
@@ -73,7 +68,7 @@ end
 
 -- JENDELA UTAMA
 local Window = Rayfield:CreateWindow({
-   Name = "PointBlox Hub (Mode Brutal Lock)",
+   Name = "PointBlox Hub (Close Range Lock)",
    LoadingTitle = "Memuat Fitur...",
    LoadingSubtitle = "Oleh Yunkz3D",
    Theme = "Default",
@@ -114,54 +109,16 @@ local Window = Rayfield:CreateWindow({
 -- NOTIFIKASI
 Rayfield:Notify({
    Title = "Pemberitahuan",
-   Content = "Fitur Mode Brutal Lock Siap Digunakan!",
+   Content = "Sistem Lock Musuh Terdekat Berhasil Dimuat!",
    Duration = 4,
    Image = 4483362458,
-})
-
--- TAB KHUSUS: MODE BRUTAL LOCK
-local BrutalTab = Window:CreateTab("Mode Brutal Lock", 4483362458)
-
-BrutalTab:CreateToggle({
-   Name = "Aktifkan Mode Brutal (Lock 100%)",
-   CurrentValue = false,
-   Flag = "BrutalModeToggle",
-   Callback = function(Value)
-      BrutalModeActive = Value
-      if Value then
-         AutoAimActive = true
-         AimSmoothness = 1.0 -- Lock Mutlak 100%
-         CenterDot.Visible = true
-         Rayfield:Notify({Title = "Mode Brutal", Content = "Aimlock 100% Aktif!", Duration = 3})
-      end
-   end,
-})
-
-BrutalTab:CreateToggle({
-   Name = "Auto-Pindah Target saat Kill (Instant Lock Next)",
-   CurrentValue = false,
-   Flag = "AutoSwitchKill",
-   Callback = function(Value)
-      AutoSwitchOnKill = Value
-   end,
-})
-
-BrutalTab:CreateDropdown({
-   Name = "Target Bagian Tubuh Brutal",
-   Options = {"Kepala", "Dada", "Acak (Kepala / Dada)"},
-   CurrentOption = {"Kepala"},
-   MultipleOptions = false,
-   Flag = "TargetTubuhBrutal",
-   Callback = function(Option)
-      AimTargetOption = Option[1]
-   end,
 })
 
 -- TAB 1: FITUR UTAMA
 local MainTab = Window:CreateTab("Fitur Utama", 4483362458)
 
 MainTab:CreateToggle({
-   Name = "Aktifkan Bantuan Bidikan (Kunci Layar)",
+   Name = "Aktifkan Bantuan Bidikan (Musuh Terdekat)",
    CurrentValue = false,
    Flag = "AutoAim",
    Callback = function(Value)
@@ -169,21 +126,44 @@ MainTab:CreateToggle({
    end,
 })
 
+MainTab:CreateSlider({
+   Name = "Jarak Maksimal Lock Musuh",
+   Range = {20, 200},
+   Increment = 5,
+   Suffix = " Studs",
+   CurrentValue = 80,
+   Flag = "MaxDistanceSlider",
+   Callback = function(Value)
+      MaxDistance = Value
+   end,
+})
+
 MainTab:CreateDropdown({
    Name = "Tingkat Kelengketan Kamera",
-   Options = {"Biasa (Sedikit Lock)", "Sedang (Lumayan Lock)", "Besar (Lock 100%)"},
-   CurrentOption = {"Sedang (Lumayan Lock)"},
+   Options = {"Biasa (Halus)", "Sedang (Sangat Fleksibel)", "Besar (Responsif)"},
+   CurrentOption = {"Sedang (Sangat Fleksibel)"},
    MultipleOptions = false,
    Flag = "PresetKelengketan",
    Callback = function(Option)
       local val = Option[1]
-      if val == "Biasa (Sedikit Lock)" then
+      if val == "Biasa (Halus)" then
          AimSmoothness = 0.08
-      elseif val == "Sedang (Lumayan Lock)" then
+      elseif val == "Sedang (Sangat Fleksibel)" then
          AimSmoothness = 0.25
-      elseif val == "Besar (Lock 100%)" then
-         AimSmoothness = 1.0
+      elseif val == "Besar (Responsif)" then
+         AimSmoothness = 0.40
       end
+   end,
+})
+
+MainTab:CreateDropdown({
+   Name = "Target Bagian Tubuh",
+   Options = {"Kepala", "Dada", "Badan Utama", "Acak (Kepala / Dada)"},
+   CurrentOption = {"Kepala"},
+   MultipleOptions = false,
+   Flag = "TargetTubuh",
+   Callback = function(Option)
+      AimTargetOption = Option[1]
    end,
 })
 
@@ -193,18 +173,6 @@ MainTab:CreateToggle({
    Flag = "ShowCenterDot",
    Callback = function(Value)
       CenterDot.Visible = Value
-   end,
-})
-
-MainTab:CreateSlider({
-   Name = "Jangkauan Bantuan Bidikan (Area Lock)",
-   Range = {30, 500},
-   Increment = 10,
-   Suffix = " Px",
-   CurrentValue = 100,
-   Flag = "UkuranFOV",
-   Callback = function(Value)
-      FOVRadius = Value
    end,
 })
 
@@ -312,54 +280,44 @@ RunService.RenderStepped:Connect(function()
       end
    end
 
-   -- Logika Aimbot & Auto-Switch Target saat Kill
-   if AutoAimActive then
+   -- Logika Aimbot khusus Musuh Terdekat (Jarak Dekat Only)
+   if AutoAimActive and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+      local MyPosition = LocalPlayer.Character.HumanoidRootPart.Position
+      local ClosestTarget = nil
+      local ShortestWorldDistance = MaxDistance
+
       local SelectedPart = "Head"
       if AimTargetOption == "Kepala" then
          SelectedPart = "Head"
       elseif AimTargetOption == "Dada" then
          SelectedPart = "Torso"
+      elseif AimTargetOption == "Badan Utama" then
+         SelectedPart = "HumanoidRootPart"
       elseif AimTargetOption == "Acak (Kepala / Dada)" then
          SelectedPart = (math.random(1, 2) == 1) and "Head" or "Torso"
       end
 
-      -- Cek apakah target saat ini masih hidup
-      local TargetValid = false
-      if CurrentLockedTarget and CurrentLockedTarget.Parent and CurrentLockedTarget.Parent:FindFirstChild("Humanoid") then
-         if CurrentLockedTarget.Parent.Humanoid.Health > 0 then
-            TargetValid = true
-         end
-      end
+      -- Cari musuh berdasarkan JARAK FISIK (Studs) terdekat dari karakter kita
+      for _, player in pairs(Players:GetPlayers()) do
+         if IsEnemy(player) and player.Character and player.Character:FindFirstChild(SelectedPart) and player.Character:FindFirstChild("Humanoid") and player.Character.Humanoid.Health > 0 then
+            local TargetPart = player.Character[SelectedPart]
+            local WorldDistance = (TargetPart.Position - MyPosition).Magnitude
 
-      -- Jika target mati atau tidak ada, cari musuh terdekat berikutnya
-      if not TargetValid or (AutoSwitchOnKill and not TargetValid) then
-         CurrentLockedTarget = nil
-         local ShortestDistance = math.huge
-
-         for _, player in pairs(Players:GetPlayers()) do
-            if IsEnemy(player) and player.Character and player.Character:FindFirstChild(SelectedPart) and player.Character:FindFirstChild("Humanoid") and player.Character.Humanoid.Health > 0 then
-               local TargetPart = player.Character[SelectedPart]
-               local ScreenPos, OnScreen = Camera:WorldToViewportPoint(TargetPart.Position)
-
+            -- Hanya kunci jika jarak musuh berada di bawah batas MaxDistance
+            if WorldDistance <= ShortestWorldDistance then
+               local _, OnScreen = Camera:WorldToViewportPoint(TargetPart.Position)
                if OnScreen then
-                  local CenterDistance = (Vector2.new(ScreenPos.X, ScreenPos.Y) - ViewportCenter).Magnitude
-                  if CenterDistance <= FOVRadius and CenterDistance < ShortestDistance then
-                     ShortestDistance = CenterDistance
-                     CurrentLockedTarget = TargetPart
-                  end
+                  ShortestWorldDistance = WorldDistance
+                  ClosestTarget = TargetPart
                end
             end
          end
       end
 
-      -- Kunci Kamera ke Target yang Aktif
-      if CurrentLockedTarget then
-         local TargetCFrame = CFrame.new(Camera.CFrame.Position, CurrentLockedTarget.Position)
-         if AimSmoothness >= 1.0 or BrutalModeActive then
-            Camera.CFrame = TargetCFrame
-         else
-            Camera.CFrame = Camera.CFrame:Lerp(TargetCFrame, AimSmoothness)
-         end
+      -- Kunci Kamera dengan Transisi Mulus (Layar Tetap Bebas Digerakkan)
+      if ClosestTarget then
+         local TargetCFrame = CFrame.new(Camera.CFrame.Position, ClosestTarget.Position)
+         Camera.CFrame = Camera.CFrame:Lerp(TargetCFrame, AimSmoothness)
       end
    end
 
