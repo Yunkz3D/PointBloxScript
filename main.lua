@@ -1,367 +1,524 @@
-local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
-
--- Service Roblox
+-- LocalScript: YunkzHubsV1_PointBlox.lua
 local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
+
 local LocalPlayer = Players.LocalPlayer
-local Camera = workspace.CurrentCamera
+local Camera = Workspace.CurrentCamera
 
--- Indikator Titik Tengah (Center Crosshair RGB)
-local CenterDot = Drawing.new("Circle")
-CenterDot.Color = Color3.fromRGB(255, 0, 0)
-CenterDot.Thickness = 1
-CenterDot.NumSides = 30
-CenterDot.Radius = 3
-CenterDot.Filled = true
-CenterDot.Visible = false
+-- =========================================================
+-- STATE FITUR & VARIABEL UTAMA
+-- =========================================================
+local FeatureStates = {
+	AutoKill = false,
+	ESP = false,
+	TriggerBot = false,
+	Wallbang = false,
+	KebakUnlimited = false,
+	AimAssist = false,
+	InfiniteAmmo = false,
+	Noclip = false,
+	NoSpread = false,
+	InstantReload = false,
+	RapidFire = false,
+	GodMode = false,
+	KillRange = 50,
+	AimFOV = 150,
+	AimSmooth = 0.08,
+	WalkSpeed = 16,
+	DamageMultiplier = 1
+}
 
--- Variabel Status Fitur
-local AutoAimActive = false
-local AimSmoothness = 0.25 -- Fleksibel & Tidak Kaku
-local AimTargetOption = "Kepala"
-local MaxDistance = 80 -- Jarak Maksimal Lock (Hanya Musuh Dekat)
+local ESPHighlights = {}
 
-local ESPActive = false
-local ESPColor = Color3.fromRGB(255, 0, 0)
-local ESPDrawings = {}
+-- =========================================================
+-- LOGIKA FITUR AKTIF (FUNCTIONAL LOGIC)
+-- =========================================================
 
-local AutoGrenadeActive = false
-local NoRecoilActive = false
-
--- FUNGSI HITUNG WARNA RGB (RAINBOW EFFECT)
-local function GetRGBColor()
-   local Hue = (tick() % 3) / 3
-   return Color3.fromHSV(Hue, 1, 1)
-end
-
--- FUNGSI CEK MUSUH (TEAM CHECK)
-local function IsEnemy(player)
-   if player == LocalPlayer then return false end
-   if LocalPlayer.Team and player.Team then
-      return LocalPlayer.Team ~= player.Team
-   end
-   if player:FindFirstChild("TeamColor") and LocalPlayer:FindFirstChild("TeamColor") then
-      return player.TeamColor ~= LocalPlayer.TeamColor
-   end
-   return true
-end
-
--- FUNGSI AMBIL GRANAT DARI BACKPACK
-local function AutoEquipGrenade()
-   local Character = LocalPlayer.Character
-   local Backpack = LocalPlayer:FindFirstChild("Backpack")
-   if not Character or not Backpack then return end
-
-   local GrenadeTool = nil
-   for _, tool in pairs(Backpack:GetChildren()) do
-      if tool:IsA("Tool") and (string.find(string.lower(tool.Name), "grenade") or string.find(string.lower(tool.Name), "granat") or string.find(string.lower(tool.Name), "bomb") or string.find(string.lower(tool.Name), "m67")) then
-         GrenadeTool = tool
-         break
-      end
-   end
-
-   if GrenadeTool then
-      Character.Humanoid:EquipTool(GrenadeTool)
-   end
-end
-
--- JENDELA UTAMA
-local Window = Rayfield:CreateWindow({
-   Name = "PointBlox Hub (Close Range Lock)",
-   LoadingTitle = "Memuat Fitur...",
-   LoadingSubtitle = "Oleh Yunkz3D",
-   Theme = "Default",
-   CustomTheme = {
-      TextColor = Color3.fromRGB(255, 255, 255),
-      Background = Color3.fromRGB(15, 15, 15),
-      Topbar = Color3.fromRGB(25, 25, 25),
-      Shadow = Color3.fromRGB(0, 0, 0),
-      NotificationBackground = Color3.fromRGB(20, 20, 20),
-      NotificationActionsBackground = Color3.fromRGB(230, 230, 230),
-      TabBackground = Color3.fromRGB(25, 25, 25),
-      TabStroke = Color3.fromRGB(255, 0, 0),
-      TabBackgroundSelected = Color3.fromRGB(40, 40, 40),
-      ElementBackground = Color3.fromRGB(25, 25, 25),
-      ElementBackgroundHover = Color3.fromRGB(35, 35, 35),
-      ElementStroke = Color3.fromRGB(255, 0, 0),
-      SecondaryElementBackground = Color3.fromRGB(20, 20, 20),
-      SecondaryElementStroke = Color3.fromRGB(40, 40, 40),
-      SliderBackground = Color3.fromRGB(30, 30, 30),
-      SliderProgress = Color3.fromRGB(255, 0, 0),
-      SliderStroke = Color3.fromRGB(255, 0, 0),
-      ToggleBackground = Color3.fromRGB(30, 30, 30),
-      ToggleEnabled = Color3.fromRGB(255, 0, 0),
-      ToggleDisabled = Color3.fromRGB(80, 80, 80),
-      DropdownBackground = Color3.fromRGB(25, 25, 25),
-      DropdownStroke = Color3.fromRGB(255, 0, 0),
-      InputBackground = Color3.fromRGB(25, 25, 25),
-      InputStroke = Color3.fromRGB(255, 0, 0),
-      PlaceholderColor = Color3.fromRGB(178, 178, 178)
-   },
-   ConfigurationSaving = {
-      Enabled = true,
-      FolderName = "PointBloxConfig",
-      FileName = "Setting"
-   }
-})
-
--- NOTIFIKASI
-Rayfield:Notify({
-   Title = "Pemberitahuan",
-   Content = "Sistem Lock Musuh Terdekat Berhasil Dimuat!",
-   Duration = 4,
-   Image = 4483362458,
-})
-
--- TAB 1: FITUR UTAMA
-local MainTab = Window:CreateTab("Fitur Utama", 4483362458)
-
-MainTab:CreateToggle({
-   Name = "Aktifkan Bantuan Bidikan (Musuh Terdekat)",
-   CurrentValue = false,
-   Flag = "AutoAim",
-   Callback = function(Value)
-      AutoAimActive = Value
-   end,
-})
-
-MainTab:CreateSlider({
-   Name = "Jarak Maksimal Lock Musuh",
-   Range = {20, 200},
-   Increment = 5,
-   Suffix = " Studs",
-   CurrentValue = 80,
-   Flag = "MaxDistanceSlider",
-   Callback = function(Value)
-      MaxDistance = Value
-   end,
-})
-
-MainTab:CreateDropdown({
-   Name = "Tingkat Kelengketan Kamera",
-   Options = {"Biasa (Halus)", "Sedang (Sangat Fleksibel)", "Besar (Responsif)"},
-   CurrentOption = {"Sedang (Sangat Fleksibel)"},
-   MultipleOptions = false,
-   Flag = "PresetKelengketan",
-   Callback = function(Option)
-      local val = Option[1]
-      if val == "Biasa (Halus)" then
-         AimSmoothness = 0.08
-      elseif val == "Sedang (Sangat Fleksibel)" then
-         AimSmoothness = 0.25
-      elseif val == "Besar (Responsif)" then
-         AimSmoothness = 0.40
-      end
-   end,
-})
-
-MainTab:CreateDropdown({
-   Name = "Target Bagian Tubuh",
-   Options = {"Kepala", "Dada", "Badan Utama", "Acak (Kepala / Dada)"},
-   CurrentOption = {"Kepala"},
-   MultipleOptions = false,
-   Flag = "TargetTubuh",
-   Callback = function(Option)
-      AimTargetOption = Option[1]
-   end,
-})
-
-MainTab:CreateToggle({
-   Name = "Tampilkan Titik Tengah (Center Crosshair)",
-   CurrentValue = false,
-   Flag = "ShowCenterDot",
-   Callback = function(Value)
-      CenterDot.Visible = Value
-   end,
-})
-
-MainTab:CreateToggle({
-   Name = "Penglihat Musuh (Kotak & Garis)",
-   CurrentValue = false,
-   Flag = "EnemyESP",
-   Callback = function(Value)
-      ESPActive = Value
-      if not Value then
-         for _, draw in pairs(ESPDrawings) do
-            if draw.Box then draw.Box:Remove() end
-            if draw.Line then draw.Line:Remove() end
-         end
-         ESPDrawings = {}
-      end
-   end,
-})
-
--- TAB 2: MODIFIKASI SENJATA
-local GunTab = Window:CreateTab("Modifikasi Senjata", 4483362458)
-
-GunTab:CreateToggle({
-   Name = "Tanpa Rekoil (Stabil 1 Titik)",
-   CurrentValue = false,
-   Flag = "NoRecoilToggle",
-   Callback = function(Value)
-      NoRecoilActive = Value
-   end,
-})
-
-GunTab:CreateToggle({
-   Name = "Auto Ambil & Refill Granat",
-   CurrentValue = false,
-   Flag = "AutoGrenade",
-   Callback = function(Value)
-      AutoGrenadeActive = Value
-      if Value then
-         AutoEquipGrenade()
-      end
-   end,
-})
-
--- TAB 3: PENGATURAN
-local ConfigTab = Window:CreateTab("Pengaturan", 4483362458)
-
-ConfigTab:CreateSection("Simpan pengaturan agar tidak perlu mengatur ulang.")
-
-ConfigTab:CreateButton({
-   Name = "Simpan Pengaturan",
-   Callback = function()
-      Rayfield:SaveConfiguration()
-      Rayfield:Notify({Title = "Pengaturan", Content = "Pengaturan tersimpan!", Duration = 3})
-   end,
-})
-
-ConfigTab:CreateButton({
-   Name = "Muat Pengaturan",
-   Callback = function()
-      Rayfield:LoadConfiguration()
-      Rayfield:Notify({Title = "Pengaturan", Content = "Pengaturan berhasil dimuat!", Duration = 3})
-   end,
-})
-
--- FUNGSI HAPUS ESP PLAYER KELUAR/MATI
-local function ClearPlayerESP(player)
-   if ESPDrawings[player] then
-      if ESPDrawings[player].Box then ESPDrawings[player].Box:Remove() end
-      if ESPDrawings[player].Line then ESPDrawings[player].Line:Remove() end
-      ESPDrawings[player] = nil
-   end
-end
-
-Players.PlayerRemoving:Connect(ClearPlayerESP)
-
--- LOGIKA SISTEM UTAMA
-RunService.RenderStepped:Connect(function()
-   local CurrentRGB = GetRGBColor()
-   local ViewportCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
-   
-   -- Titik Tengah RGB
-   CenterDot.Position = ViewportCenter
-   CenterDot.Color = CurrentRGB
-
-   -- Logika No Recoil
-   if NoRecoilActive and LocalPlayer.Character then
-      local Tool = LocalPlayer.Character:FindFirstChildOfClass("Tool")
-      if Tool then
-         for _, v in pairs(Tool:GetDescendants()) do
-            if v:IsA("Value") or v:IsA("NumberValue") or v:IsA("IntValue") then
-               local name = string.lower(v.Name)
-               if string.find(name, "recoil") or string.find(name, "spread") or string.find(name, "accuracy") or string.find(name, "kick") then
-                  v.Value = 0
-               end
-            end
-         end
-      end
-   end
-
-   -- Logika Refill Granat
-   if AutoGrenadeActive and LocalPlayer.Character then
-      local Tool = LocalPlayer.Character:FindFirstChildOfClass("Tool")
-      if not Tool or not (string.find(string.lower(Tool.Name), "grenade") or string.find(string.lower(Tool.Name), "granat") or string.find(string.lower(Tool.Name), "bomb") or string.find(string.lower(Tool.Name), "m67")) then
-         AutoEquipGrenade()
-      end
-   end
-
-   -- Logika Aimbot khusus Musuh Terdekat (Jarak Dekat Only)
-   if AutoAimActive and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-      local MyPosition = LocalPlayer.Character.HumanoidRootPart.Position
-      local ClosestTarget = nil
-      local ShortestWorldDistance = MaxDistance
-
-      local SelectedPart = "Head"
-      if AimTargetOption == "Kepala" then
-         SelectedPart = "Head"
-      elseif AimTargetOption == "Dada" then
-         SelectedPart = "Torso"
-      elseif AimTargetOption == "Badan Utama" then
-         SelectedPart = "HumanoidRootPart"
-      elseif AimTargetOption == "Acak (Kepala / Dada)" then
-         SelectedPart = (math.random(1, 2) == 1) and "Head" or "Torso"
-      end
-
-      -- Cari musuh berdasarkan JARAK FISIK (Studs) terdekat dari karakter kita
-      for _, player in pairs(Players:GetPlayers()) do
-         if IsEnemy(player) and player.Character and player.Character:FindFirstChild(SelectedPart) and player.Character:FindFirstChild("Humanoid") and player.Character.Humanoid.Health > 0 then
-            local TargetPart = player.Character[SelectedPart]
-            local WorldDistance = (TargetPart.Position - MyPosition).Magnitude
-
-            -- Hanya kunci jika jarak musuh berada di bawah batas MaxDistance
-            if WorldDistance <= ShortestWorldDistance then
-               local _, OnScreen = Camera:WorldToViewportPoint(TargetPart.Position)
-               if OnScreen then
-                  ShortestWorldDistance = WorldDistance
-                  ClosestTarget = TargetPart
-               end
-            end
-         end
-      end
-
-      -- Kunci Kamera dengan Transisi Mulus (Layar Tetap Bebas Digerakkan)
-      if ClosestTarget then
-         local TargetCFrame = CFrame.new(Camera.CFrame.Position, ClosestTarget.Position)
-         Camera.CFrame = Camera.CFrame:Lerp(TargetCFrame, AimSmoothness)
-      end
-   end
-
-   -- Logika ESP Kotak & Garis RGB
-   if ESPActive then
-      for _, player in pairs(Players:GetPlayers()) do
-         if IsEnemy(player) and player.Character and player.Character:FindFirstChild("HumanoidRootPart") and player.Character:FindFirstChild("Humanoid") and player.Character.Humanoid.Health > 0 then
-            local Char = player.Character
-            local Root = Char.HumanoidRootPart
-            local Pos, OnScreen = Camera:WorldToViewportPoint(Root.Position)
-
-            if OnScreen then
-               if not ESPDrawings[player] then
-                  ESPDrawings[player] = {
-                     Box = Drawing.new("Square"),
-                     Line = Drawing.new("Line")
-                  }
-               end
-
-               local CFramePos, Size = Char:GetBoundingBox()
-               local TopPos = Camera:WorldToViewportPoint((CFramePos * CFrame.new(0, Size.Y / 2, 0)).Position)
-               local BottomPos = Camera:WorldToViewportPoint((CFramePos * CFrame.new(0, -Size.Y / 2, 0)).Position)
-               local BoxHeight = math.abs(TopPos.Y - BottomPos.Y)
-               local BoxWidth = BoxHeight / 1.5
-
-               local Box = ESPDrawings[player].Box
-               Box.Visible = true
-               Box.Color = CurrentRGB
-               Box.Thickness = 1.5
-               Box.Size = Vector2.new(BoxWidth, BoxHeight)
-               Box.Position = Vector2.new(Pos.X - BoxWidth / 2, Pos.Y - BoxHeight / 2)
-
-               local Line = ESPDrawings[player].Line
-               Line.Visible = true
-               Line.Color = CurrentRGB
-               Line.Thickness = 1.5
-               Line.From = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
-               Line.To = Vector2.new(Pos.X, Pos.Y)
-            else
-               ClearPlayerESP(player)
-            end
-         else
-            ClearPlayerESP(player)
-         end
-      end
-   end
+-- WalkSpeed Loop saat Respawn
+LocalPlayer.CharacterAdded:Connect(function(char)
+	local hum = char:WaitForChild("Humanoid", 5)
+	if hum then hum.WalkSpeed = FeatureStates.WalkSpeed end
 end)
+
+-- Noclip Loop
+RunService.Stepped:Connect(function()
+	if FeatureStates.Noclip and LocalPlayer.Character then
+		for _, part in pairs(LocalPlayer.Character:GetDescendants()) do
+			if part:IsA("BasePart") then
+				part.CanCollide = false
+			end
+		end
+	end
+end)
+
+-- ESP (Highlight Enemy)
+local function updateESP()
+	for _, player in pairs(Players:GetPlayers()) do
+		if player ~= LocalPlayer and player.Character then
+			if FeatureStates.ESP then
+				if not ESPHighlights[player] then
+					local hl = Instance.new("Highlight")
+					hl.Name = "ESPHighlight"
+					hl.FillColor = Color3.fromRGB(255, 50, 50)
+					hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+					hl.FillTransparency = 0.5
+					hl.Adornee = player.Character
+					hl.Parent = player.Character
+					ESPHighlights[player] = hl
+				end
+			else
+				if ESPHighlights[player] then
+					ESPHighlights[player]:Destroy()
+					ESPHighlights[player] = nil
+				end
+			end
+		end
+	end
+end
+
+-- RenderStepped Loop (WalkSpeed Update & Aim Assist/AutoKill Logic)
+RunService.RenderStepped:Connect(function()
+	if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+		LocalPlayer.Character.Humanoid.WalkSpeed = FeatureStates.WalkSpeed
+	end
+
+	if FeatureStates.AimAssist or FeatureStates.AutoKill then
+		local closestTarget = nil
+		local shortestDistance = FeatureStates.KillRange
+
+		for _, player in pairs(Players:GetPlayers()) do
+			if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+				local targetPart = player.Character.HumanoidRootPart
+				local distance = (LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")) 
+					and (LocalPlayer.Character.HumanoidRootPart.Position - targetPart.Position).Magnitude or 9999
+
+				if distance <= shortestDistance then
+					closestTarget = targetPart
+					shortestDistance = distance
+				end
+			end
+		end
+
+		if closestTarget and FeatureStates.AimAssist then
+			Camera.CFrame = Camera.CFrame:Lerp(CFrame.new(Camera.CFrame.Position, closestTarget.Position), FeatureStates.AimSmooth)
+		end
+	end
+end)
+
+Players.PlayerAdded:Connect(function() updateESP() end)
+Players.PlayerRemoving:Connect(function(player)
+	if ESPHighlights[player] then
+		ESPHighlights[player]:Destroy()
+		ESPHighlights[player] = nil
+	end
+end)
+
+-- =========================================================
+-- DESAIN USER INTERFACE (GUI) - YUNKZHUBSV1
+-- =========================================================
+
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "YunkzHubsV1"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+
+local mainFrame = Instance.new("Frame")
+mainFrame.Name = "MainFrame"
+mainFrame.Size = UDim2.new(0, 520, 0, 310)
+mainFrame.Position = UDim2.new(0.5, -260, 0.5, -155)
+mainFrame.BackgroundColor3 = Color3.fromRGB(15, 16, 22)
+mainFrame.BorderSizePixel = 0
+mainFrame.ClipsDescendants = true
+mainFrame.Active = true
+mainFrame.Draggable = true
+mainFrame.Parent = screenGui
+
+local mainCorner = Instance.new("UICorner")
+mainCorner.CornerRadius = UDim.new(0, 8)
+mainCorner.Parent = mainFrame
+
+-- Top Bar Header
+local topBar = Instance.new("Frame")
+topBar.Name = "TopBar"
+topBar.Size = UDim2.new(1, 0, 0, 32)
+topBar.BackgroundColor3 = Color3.fromRGB(10, 11, 16)
+topBar.BorderSizePixel = 0
+topBar.Parent = mainFrame
+
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Name = "Title"
+titleLabel.Size = UDim2.new(1, -100, 1, 0)
+titleLabel.Position = UDim2.new(0, 12, 0, 0)
+titleLabel.BackgroundTransparency = 1
+titleLabel.Text = "YunkzHubsV1 | PointBlox | POIN BLOX"
+titleLabel.TextColor3 = Color3.fromRGB(220, 220, 220)
+titleLabel.TextSize = 13
+titleLabel.Font = Enum.Font.SourceSansBold
+titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+titleLabel.Parent = topBar
+
+-- Tombol Close (X)
+local closeBtn = Instance.new("TextButton")
+closeBtn.Name = "CloseBtn"
+closeBtn.Size = UDim2.new(0, 22, 0, 22)
+closeBtn.Position = UDim2.new(1, -28, 0, 5)
+closeBtn.BackgroundColor3 = Color3.fromRGB(235, 60, 60)
+closeBtn.Text = "X"
+closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+closeBtn.Font = Enum.Font.SourceSansBold
+closeBtn.TextSize = 12
+closeBtn.Parent = topBar
+
+local closeCorner = Instance.new("UICorner")
+closeCorner.CornerRadius = UDim.new(0, 4)
+closeCorner.Parent = closeBtn
+
+closeBtn.MouseButton1Click:Connect(function()
+	screenGui:Destroy()
+end)
+
+-- Sidebar Navigasi
+local sidebar = Instance.new("Frame")
+sidebar.Name = "Sidebar"
+sidebar.Size = UDim2.new(0, 110, 1, -32)
+sidebar.Position = UDim2.new(0, 0, 0, 32)
+sidebar.BackgroundColor3 = Color3.fromRGB(12, 13, 18)
+sidebar.BorderSizePixel = 0
+sidebar.Parent = mainFrame
+
+local sidebarLayout = Instance.new("UIListLayout")
+sidebarLayout.SortOrder = Enum.SortOrder.LayoutOrder
+sidebarLayout.Padding = UDim.new(0, 6)
+sidebarLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+sidebarLayout.Parent = sidebar
+
+local sidebarPadding = Instance.new("UIPadding")
+sidebarPadding.PaddingTop = UDim.new(0, 8)
+sidebarPadding.Parent = sidebar
+
+-- Content Area Konten
+local contentArea = Instance.new("Frame")
+contentArea.Name = "ContentArea"
+contentArea.Size = UDim2.new(1, -115, 1, -37)
+contentArea.Position = UDim2.new(0, 112, 0, 34)
+contentArea.BackgroundTransparency = 1
+contentArea.Parent = mainFrame
+
+local tabs = {}
+local tabButtons = {}
+
+local function createTab(tabName)
+	local tabFrame = Instance.new("ScrollingFrame")
+	tabFrame.Name = tabName .. "Tab"
+	tabFrame.Size = UDim2.new(1, 0, 1, 0)
+	tabFrame.BackgroundTransparency = 1
+	tabFrame.ScrollBarThickness = 4
+	tabFrame.ScrollBarImageColor3 = Color3.fromRGB(0, 140, 255)
+	tabFrame.Visible = false
+	tabFrame.Parent = contentArea
+
+	local listLayout = Instance.new("UIListLayout")
+	listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	listLayout.Padding = UDim.new(0, 8)
+	listLayout.Parent = tabFrame
+
+	tabs[tabName] = tabFrame
+
+	local btn = Instance.new("TextButton")
+	btn.Name = tabName .. "Btn"
+	btn.Size = UDim2.new(0, 96, 0, 30)
+	btn.BackgroundColor3 = Color3.fromRGB(22, 24, 34)
+	btn.Text = tabName
+	btn.TextColor3 = Color3.fromRGB(180, 180, 180)
+	btn.Font = Enum.Font.SourceSans
+	btn.TextSize = 13
+	btn.Parent = sidebar
+
+	local btnCorner = Instance.new("UICorner")
+	btnCorner.CornerRadius = UDim.new(0, 6)
+	btnCorner.Parent = btn
+
+	tabButtons[tabName] = btn
+
+	btn.MouseButton1Click:Connect(function()
+		for name, frame in pairs(tabs) do
+			frame.Visible = (name == tabName)
+		end
+		for name, button in pairs(tabButtons) do
+			if name == tabName then
+				button.BackgroundColor3 = Color3.fromRGB(0, 102, 204)
+				button.TextColor3 = Color3.fromRGB(255, 255, 255)
+			else
+				button.BackgroundColor3 = Color3.fromRGB(22, 24, 34)
+				button.TextColor3 = Color3.fromRGB(180, 180, 180)
+			end
+		end
+	end)
+
+	return tabFrame
+end
+
+local homeTab = createTab("Home")
+local farmTab = createTab("Farm")
+local roomTab = createTab("Room")
+local teamTab = createTab("Team")
+local miscTab = createTab("Misc")
+local musicTab = createTab("Music")
+local settingsTab = createTab("Settings")
+
+-- =========================================================
+-- TAB HOME
+-- =========================================================
+local profileFrame = Instance.new("Frame")
+profileFrame.Size = UDim2.new(1, -10, 0, 70)
+profileFrame.BackgroundColor3 = Color3.fromRGB(20, 22, 30)
+profileFrame.Parent = homeTab
+
+local profCorner = Instance.new("UICorner")
+profCorner.CornerRadius = UDim.new(0, 6)
+profCorner.Parent = profileFrame
+
+local avatarImg = Instance.new("ImageLabel")
+avatarImg.Size = UDim2.new(0, 54, 0, 54)
+avatarImg.Position = UDim2.new(0, 8, 0, 8)
+avatarImg.BackgroundColor3 = Color3.fromRGB(30, 33, 45)
+avatarImg.Image = Players:GetUserThumbnailAsync(LocalPlayer.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size100x100)
+avatarImg.Parent = profileFrame
+
+local avatarCorner = Instance.new("UICorner")
+avatarCorner.CornerRadius = UDim.new(0, 8)
+avatarCorner.Parent = avatarImg
+
+local usernameLbl = Instance.new("TextLabel")
+usernameLbl.Size = UDim2.new(1, -75, 0, 20)
+usernameLbl.Position = UDim2.new(0, 70, 0, 12)
+usernameLbl.BackgroundTransparency = 1
+usernameLbl.Text = LocalPlayer.DisplayName
+usernameLbl.TextColor3 = Color3.fromRGB(0, 170, 255)
+usernameLbl.TextSize = 14
+usernameLbl.Font = Enum.Font.SourceSansBold
+usernameLbl.TextXAlignment = Enum.TextXAlignment.Left
+usernameLbl.Parent = profileFrame
+
+local useridLbl = Instance.new("TextLabel")
+useridLbl.Size = UDim2.new(1, -75, 0, 16)
+useridLbl.Position = UDim2.new(0, 70, 0, 32)
+useridLbl.BackgroundTransparency = 1
+useridLbl.Text = "@" .. LocalPlayer.Name .. "\nID: " .. LocalPlayer.UserId
+useridLbl.TextColor3 = Color3.fromRGB(150, 150, 150)
+useridLbl.TextSize = 11
+useridLbl.Font = Enum.Font.SourceSans
+useridLbl.TextXAlignment = Enum.TextXAlignment.Left
+useridLbl.Parent = profileFrame
+
+local featureTitle = Instance.new("TextLabel")
+featureTitle.Size = UDim2.new(1, -10, 0, 20)
+featureTitle.BackgroundTransparency = 1
+featureTitle.Text = "Available Features:"
+featureTitle.TextColor3 = Color3.fromRGB(0, 140, 255)
+featureTitle.TextSize = 12
+featureTitle.Font = Enum.Font.SourceSansBold
+featureTitle.TextXAlignment = Enum.TextXAlignment.Left
+featureTitle.Parent = homeTab
+
+local featuresText = Instance.new("TextLabel")
+featuresText.Size = UDim2.new(1, -10, 0, 150)
+featuresText.BackgroundTransparency = 1
+featuresText.Text = "- Auto Create Room: Create room auto\n- ESP: See enemies through wall\n- AimAssist: Smooth aimbot with FOV circle\n- TriggerBot: Auto shoot on target\n- Wallbang: Shoot through wall\n- Kebak Unlimited: Force ragdoll forever\n- No Spread: Perfect accuracy\n- Instant Reload: Zero reload time\n- Rapid Fire: 20 shots/second\n- Damage Multiplier: x10 damage\n- God Mode: Unlimited Health"
+featuresText.TextColor3 = Color3.fromRGB(160, 160, 160)
+featuresText.TextSize = 11
+featuresText.Font = Enum.Font.SourceSans
+featuresText.TextXAlignment = Enum.TextXAlignment.Left
+featuresText.TextYAlignment = Enum.TextYAlignment.Top
+featuresText.Parent = homeTab
+
+-- =========================================================
+-- HELPER KONTROL UI (TOGGLE & SLIDER)
+-- =========================================================
+
+local function createToggle(parent, titleText, featureKey, onChange)
+	local row = Instance.new("Frame")
+	row.Size = UDim2.new(1, -10, 0, 32)
+	row.BackgroundColor3 = Color3.fromRGB(20, 22, 30)
+	row.Parent = parent
+
+	local rowCorner = Instance.new("UICorner")
+	rowCorner.CornerRadius = UDim.new(0, 5)
+	rowCorner.Parent = row
+
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.new(0.7, 0, 1, 0)
+	label.Position = UDim2.new(0, 10, 0, 0)
+	label.BackgroundTransparency = 1
+	label.Text = titleText
+	label.TextColor3 = Color3.fromRGB(200, 200, 200)
+	label.TextSize = 12
+	label.Font = Enum.Font.SourceSans
+	label.TextXAlignment = Enum.TextXAlignment.Left
+	label.Parent = row
+
+	local toggleBg = Instance.new("TextButton")
+	toggleBg.Size = UDim2.new(0, 36, 0, 18)
+	toggleBg.Position = UDim2.new(1, -44, 0.5, -9)
+	toggleBg.BackgroundColor3 = Color3.fromRGB(40, 44, 58)
+	toggleBg.Text = ""
+	toggleBg.Parent = row
+
+	local toggleCorner = Instance.new("UICorner")
+	toggleCorner.CornerRadius = UDim.new(1, 0)
+	toggleCorner.Parent = toggleBg
+
+	local circle = Instance.new("Frame")
+	circle.Size = UDim2.new(0, 14, 0, 14)
+	circle.Position = UDim2.new(0, 2, 0.5, -7)
+	circle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+	circle.Parent = toggleBg
+
+	local circleCorner = Instance.new("UICorner")
+	circleCorner.CornerRadius = UDim.new(1, 0)
+	circleCorner.Parent = circle
+
+	local toggled = false
+	toggleBg.MouseButton1Click:Connect(function()
+		toggled = not toggled
+		FeatureStates[featureKey] = toggled
+		
+		if toggled then
+			toggleBg.BackgroundColor3 = Color3.fromRGB(0, 140, 255)
+			circle:TweenPosition(UDim2.new(1, -16, 0.5, -7), Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.15, true)
+		else
+			toggleBg.BackgroundColor3 = Color3.fromRGB(40, 44, 58)
+			circle:TweenPosition(UDim2.new(0, 2, 0.5, -7), Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.15, true)
+		end
+		
+		if onChange then onChange(toggled) end
+	end)
+end
+
+local function createSlider(parent, titleText, featureKey, min, max, default)
+	local row = Instance.new("Frame")
+	row.Size = UDim2.new(1, -10, 0, 45)
+	row.BackgroundColor3 = Color3.fromRGB(20, 22, 30)
+	row.Parent = parent
+
+	local rowCorner = Instance.new("UICorner")
+	rowCorner.CornerRadius = UDim.new(0, 5)
+	rowCorner.Parent = row
+
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.new(1, -20, 0, 18)
+	label.Position = UDim2.new(0, 10, 0, 4)
+	label.BackgroundTransparency = 1
+	label.Text = titleText .. ": " .. tostring(default)
+	label.TextColor3 = Color3.fromRGB(200, 200, 200)
+	label.TextSize = 12
+	label.Font = Enum.Font.SourceSans
+	label.TextXAlignment = Enum.TextXAlignment.Left
+	label.Parent = row
+
+	local track = Instance.new("Frame")
+	track.Size = UDim2.new(1, -20, 0, 4)
+	track.Position = UDim2.new(0, 10, 0, 28)
+	track.BackgroundColor3 = Color3.fromRGB(40, 44, 58)
+	track.Parent = row
+
+	local fill = Instance.new("Frame")
+	fill.Size = UDim2.new((default - min)/(max - min), 0, 1, 0)
+	fill.BackgroundColor3 = Color3.fromRGB(0, 140, 255)
+	fill.BorderSizePixel = 0
+	fill.Parent = track
+
+	local thumb = Instance.new("Frame")
+	thumb.Size = UDim2.new(0, 10, 0, 10)
+	thumb.Position = UDim2.new(1, -5, 0.5, -5)
+	thumb.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+	thumb.Parent = fill
+
+	local thumbCorner = Instance.new("UICorner")
+	thumbCorner.CornerRadius = UDim.new(1, 0)
+	thumbCorner.Parent = thumb
+
+	local dragging = false
+	track.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = true
+		end
+	end)
+
+	UserInputService.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = false
+		end
+	end)
+
+	UserInputService.InputChanged:Connect(function(input)
+		if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+			local mousePos = input.Position.X
+			local trackPos = track.AbsolutePosition.X
+			local trackWidth = track.AbsoluteSize.X
+			local pct = math.clamp((mousePos - trackPos) / trackWidth, 0, 1)
+			
+			fill.Size = UDim2.new(pct, 0, 1, 0)
+			local val = math.floor(min + (max - min) * pct)
+			label.Text = titleText .. ": " .. tostring(val)
+			FeatureStates[featureKey] = val
+		end
+	end)
+end
+
+-- =========================================================
+-- ISIAN MASING-MASING TAB
+-- =========================================================
+
+-- Farm Tab (Gambar 2)
+createToggle(farmTab, "Auto Kill", "AutoKill")
+createToggle(farmTab, "ESP", "ESP", function(active) updateESP() end)
+createToggle(farmTab, "Trigger Bot", "TriggerBot")
+createToggle(farmTab, "Wallbang", "Wallbang")
+createToggle(farmTab, "Kebak Unlimited", "KebakUnlimited")
+createSlider(farmTab, "Kill Range", "KillRange", 0, 100, 50)
+
+-- Room Tab (Gambar 3)
+createToggle(roomTab, "Auto Create Room", "AutoCreateRoom")
+
+local roomInputBox = Instance.new("TextBox")
+roomInputBox.Size = UDim2.new(1, -10, 0, 28)
+roomInputBox.BackgroundColor3 = Color3.fromRGB(20, 22, 30)
+roomInputBox.Text = LocalPlayer.Name
+roomInputBox.TextColor3 = Color3.fromRGB(200, 200, 200)
+roomInputBox.Font = Enum.Font.SourceSans
+roomInputBox.TextSize = 12
+roomInputBox.Parent = roomTab
+
+local createRoomBtn = Instance.new("TextButton")
+createRoomBtn.Size = UDim2.new(1, -10, 0, 32)
+createRoomBtn.BackgroundColor3 = Color3.fromRGB(0, 130, 60)
+createRoomBtn.Text = "CREATE ROOM NOW"
+createRoomBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+createRoomBtn.Font = Enum.Font.SourceSansBold
+createRoomBtn.TextSize = 12
+createRoomBtn.Parent = roomTab
+
+local roomBtnCorner = Instance.new("UICorner")
+roomBtnCorner.CornerRadius = UDim.new(0, 6)
+roomBtnCorner.Parent = createRoomBtn
+
+-- Misc Tab (Gambar 4 & 5)
+createToggle(miscTab, "Aim Assist", "AimAssist")
+createToggle(miscTab, "Infinite Ammo", "InfiniteAmmo")
+createToggle(miscTab, "Noclip", "Noclip")
+createToggle(miscTab, "No Spread", "NoSpread")
+createToggle(miscTab, "Instant Reload", "InstantReload")
+createToggle(miscTab, "Rapid Fire", "RapidFire")
+createToggle(miscTab, "God Mode", "GodMode")
+createSlider(miscTab, "Aim FOV", "AimFOV", 0, 360, 150)
+createSlider(miscTab, "Aim Smooth", "AimSmooth", 0, 1, 0.08)
+createSlider(miscTab, "Walk Speed", "WalkSpeed", 16, 200, 16)
+createSlider(miscTab, "Damage Multiplier", "DamageMultiplier", 1, 10, 1)
+
+-- Tab Default
+homeTab.Visible = true
+tabButtons["Home"].BackgroundColor3 = Color3.fromRGB(0, 102, 204)
+tabButtons["Home"].TextColor3 = Color3.fromRGB(255, 255, 255)
